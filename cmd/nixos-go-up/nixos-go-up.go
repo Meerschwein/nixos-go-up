@@ -148,8 +148,7 @@ func FormatDiskLegacy(sel selection.Selection) (cmds []command.Command) {
 		},
 	}
 
-	cmds, err := d.Commands(disk.BIOS)
-	util.ExitIfErr(err)
+	cmds = d.Commands(disk.BIOS)
 
 	return
 }
@@ -182,8 +181,7 @@ func FormatDiskEfi(sel selection.Selection) (cmds []command.Command) {
 		},
 	}
 
-	cmds, err := d.Commands(disk.UEFI)
-	util.ExitIfErr(err)
+	cmds = d.Commands(disk.UEFI)
 
 	return
 }

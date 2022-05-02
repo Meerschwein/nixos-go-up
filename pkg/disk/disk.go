@@ -112,7 +112,7 @@ func (d Disk) PartitionName(partition int) string {
 	}
 }
 
-func (d Disk) TableCommands() (cmds []command.Command, err error) {
+func (d Disk) TableCommands() (cmds []command.Command) {
 	var cmd command.ShellCommand
 	switch d.Table {
 	case Mbr:
@@ -126,7 +126,7 @@ func (d Disk) TableCommands() (cmds []command.Command, err error) {
 			Cmd:   "parted -s /dev/" + d.Name + " -- mklabel gpt",
 		}
 	default:
-		err = fmt.Errorf("unrecognized partitioning scheme %s! Aborting... ", d.Table)
+		log.Panicf("unrecognized partitioning scheme %s! Aborting... ", d.Table)
 		return
 	}
 	cmds = append(cmds, cmd)
@@ -134,7 +134,7 @@ func (d Disk) TableCommands() (cmds []command.Command, err error) {
 	return
 }
 
-func MakeFilesystemCommand(p Partition) (cmds []command.Command, err error) {
+func MakeFilesystemCommand(p Partition) (cmds []command.Command) {
 	cmd := command.ShellCommand{
 		Label: fmt.Sprintf("Partition /dev/%s to %s", p.Path, p.Format),
 	}
@@ -145,7 +145,7 @@ func MakeFilesystemCommand(p Partition) (cmds []command.Command, err error) {
 	case Fat32:
 		cmd.Cmd = fmt.Sprintf("mkfs.fat -F32 -n %s /dev/%s", p.Label, p.Path)
 	default:
-		err = fmt.Errorf("unrecognized filesystem %s! Aborting... ", p.Format)
+		log.Panicf("unrecognized filesystem %s! Aborting... ", p.Format)
 	}
 
 	cmds = append(cmds, cmd)
@@ -160,12 +160,8 @@ var (
 	BIOS BootForm = "bios"
 )
 
-func (d Disk) Commands(boot BootForm) (cmds []command.Command, err error) {
-	newCmds, err := d.TableCommands()
-	if err != nil {
-		return
-	}
-	cmds = append(cmds, newCmds...)
+func (d Disk) Commands(boot BootForm) (cmds []command.Command) {
+	cmds = append(cmds, d.TableCommands()...)
 
 	for _, p := range d.Partitions {
 		partType := "extended"
@@ -202,11 +198,7 @@ func (d Disk) Commands(boot BootForm) (cmds []command.Command, err error) {
 	}
 
 	for _, p := range d.Partitions {
-		newCmds, err = MakeFilesystemCommand(p)
-		if err != nil {
-			return
-		}
-		cmds = append(cmds, newCmds...)
+		cmds = append(cmds, MakeFilesystemCommand(p)...)
 	}
 
 	return
