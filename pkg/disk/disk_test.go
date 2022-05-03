@@ -6,43 +6,21 @@ import (
 	"testing"
 
 	"github.com/Meerschwein/nixos-go-up/pkg/disk"
+	"github.com/Meerschwein/nixos-go-up/test/generators"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"pgregory.net/rapid"
 )
 
 var (
-	partitionGen = rapid.Custom(func(t *rapid.T) disk.Partition {
-		return disk.Partition{
-			Format:   rapid.SampledFrom([]disk.DiskFormat{disk.Ext4, disk.Fat32}).Draw(t, "Partition_Format").(disk.DiskFormat),
-			Label:    rapid.String().Draw(t, "Partition_Label").(string),
-			Primary:  rapid.Bool().Draw(t, "Partition_Primary").(bool),
-			Path:     rapid.String().Draw(t, "Partition_Path").(string),
-			Number:   rapid.Int().Draw(t, "Partition_Number").(int),
-			From:     rapid.String().Draw(t, "Partition_From").(string),
-			To:       rapid.String().Draw(t, "Partition_To").(string),
-			Bootable: rapid.Bool().Draw(t, "Partition_Bootable").(bool),
-		}
-	})
-
-	diskGen = rapid.Custom(func(t *rapid.T) disk.Disk {
-		return disk.Disk{
-			Name:       rapid.String().Draw(t, "Disk_Name").(string),
-			Vendor:     rapid.String().Draw(t, "Disk_Vendor").(string),
-			Model:      rapid.String().Draw(t, "Disk_Model").(string),
-			SizeGB:     rapid.Int().Draw(t, "Disk_SizeGB").(int),
-			Table:      rapid.SampledFrom([]disk.Table{disk.Gpt, disk.Mbr}).Draw(t, "Disk_Table").(disk.Table),
-			Partitions: rapid.SliceOfN(partitionGen, 0, 5).Draw(t, "Disk_Partitions").([]disk.Partition),
-		}
-	})
-
 	bootFormGen = rapid.Custom(func(t *rapid.T) disk.BootForm {
 		return rapid.SampledFrom([]disk.BootForm{disk.UEFI, disk.BIOS}).Draw(t, "BootForm").(disk.BootForm)
 	})
 )
 
-func TestDisk_PartitionName(t *testing.T) {
+func TestDisk_PartitionName_Properties(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		d := diskGen.Draw(t, "Disk").(disk.Disk)
+		d := generators.DiskGen().Draw(t, "Disk").(disk.Disk)
 		part := rapid.Int().Draw(t, "Partition number").(int)
 
 		res := d.PartitionName(part)
@@ -52,10 +30,67 @@ func TestDisk_PartitionName(t *testing.T) {
 	})
 }
 
-func TestDisk_TableCommands(t *testing.T) {
+func TestDisk_PartitionName_Unit(t *testing.T) {
+	testcases := []struct {
+		Name      string
+		Partition int
+		Expected  string
+	}{
+		{
+			Name:      "sda",
+			Partition: 1,
+			Expected:  "sda1",
+		},
+		{
+			Name:      "sd",
+			Partition: 2,
+			Expected:  "sd2",
+		},
+		{
+			Name:      "sdb",
+			Partition: 3,
+			Expected:  "sdb3",
+		},
+		{
+			Name:      "nvme0n1",
+			Partition: 1,
+			Expected:  "nvme0n1p1",
+		},
+		{
+			Name:      "nvme1n4",
+			Partition: 2,
+			Expected:  "nvme1n4p2",
+		},
+		{
+			Name:      "nvme",
+			Partition: 5,
+			Expected:  "nvmep5",
+		},
+		{
+			Name:      "test",
+			Partition: 1,
+			Expected:  "test1",
+		},
+		{
+			Name:      "blahblah",
+			Partition: 5,
+			Expected:  "blahblah5",
+		},
+	}
+
+	for _, test := range testcases {
+		d := disk.Disk{Name: test.Name}
+
+		actual := d.PartitionName(test.Partition)
+
+		assert.Equal(t, test.Expected, actual)
+	}
+}
+
+func TestDisk_TableCommands_Properties(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		d1 := diskGen.Draw(t, "Disk").(disk.Disk)
-		d2 := diskGen.Filter(func(d disk.Disk) bool {
+		d1 := generators.DiskGen().Draw(t, "Disk").(disk.Disk)
+		d2 := generators.DiskGen().Filter(func(d disk.Disk) bool {
 			return d.Table != d1.Table
 		}).Draw(t, "Disk").(disk.Disk)
 
@@ -67,10 +102,10 @@ func TestDisk_TableCommands(t *testing.T) {
 	})
 }
 
-func TestDisk_MakeFilesystemCommand(t *testing.T) {
+func TestDisk_MakeFilesystemCommand_Properties(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		part := partitionGen.Draw(t, "Partition").(disk.Partition)
-		part2 := partitionGen.Filter(func(p disk.Partition) bool {
+		part := generators.PartitionGen().Draw(t, "Partition").(disk.Partition)
+		part2 := generators.PartitionGen().Filter(func(p disk.Partition) bool {
 			return p.Format != part.Format
 		}).Draw(t, "Partition 2").(disk.Partition)
 
@@ -82,11 +117,11 @@ func TestDisk_MakeFilesystemCommand(t *testing.T) {
 	})
 }
 
-func TestDisk_Commands(t *testing.T) {
+func TestDisk_Commands_Properties(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		d := diskGen.Draw(t, "Disk").(disk.Disk)
+		d := generators.DiskGen().Draw(t, "Disk").(disk.Disk)
 
-		bf1 := bootFormGen.Draw(t, "BootForm 1").(disk.BootForm)
+		bf1 := bootFormGen.Draw(t, "BootForm").(disk.BootForm)
 
 		cmds := d.Commands(bf1)
 

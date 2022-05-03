@@ -4,9 +4,14 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "test 10.000",
+      "label": "test 100.000",
       "type": "shell",
-      "command": "go test ./... -rapid.checks=10000"
+      "command": "go test ./... -rapid.checks=100000"
+    },
+    {
+      "label": "test 1.000",
+      "type": "shell",
+      "command": "go test ./... -rapid.checks=1000"
     },
     {
       "label": "fmt ",

@@ -28,12 +28,13 @@ const (
 func init() {
 	flag.BoolVar(&dryRun, "dry-run", false, "dry-run")
 
-	flag.Parse()
 }
 
 type CommandGenerator func(sel selection.Selection) (cmds []command.Command)
 
 func main() {
+	flag.Parse()
+	
 	if !util.WasRunAsRoot() {
 		fmt.Println("Please run as root!")
 		return
@@ -292,7 +293,7 @@ func GenerateDefaultNixosConfig(sel selection.Selection) (cmds []command.Command
 	return
 }
 
-func UefiMountBootDir(sel selection.Selection) (cmds []command.Command) {
+func UefiMountBootDir(_ selection.Selection) (cmds []command.Command) {
 	cmds = append(cmds, command.ShellCommand{
 		Label: "Create /mnt/boot",
 		Cmd:   "mkdir -p/mnt/boot",
