@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 
@@ -37,10 +38,12 @@ type Partition struct {
 }
 
 type Disk struct {
-	Name   string
-	Vendor string
-	Model  string
-	SizeGB int
+	Name             string
+	Vendor           string
+	Model            string
+	SizeGB           int
+	Encrypt          bool
+	EncryptionPasswd string
 
 	Table      Table
 	Partitions []Partition
@@ -134,6 +137,43 @@ func (d Disk) TableCommands() (cmds []command.Command) {
 	return
 }
 
+func MakeEncryptedFilesystemCommand(p Partition, encryptionPasswd string) (cmds []command.Command) {
+
+	luksFile := ".luks-key"
+	cmds = append(cmds, command.FunctionCommand{
+		Label: "Generate LUKS key file",
+		Func: func() bool {
+			return nil == os.WriteFile("./"+luksFile, []byte(encryptionPasswd), 0644)
+		},
+	}, command.ShellCommand{
+		Label: fmt.Sprintf("Encrypt %s", p.Path),
+		Cmd:   fmt.Sprintf("cryptsetup luksFormat /dev/%s --key-file ./%s -M luks2 --pbkdf argon2id -i 5000", p.Path, luksFile),
+	}, command.ShellCommand{
+		Label: "Open LUKS partition",
+		Cmd:   fmt.Sprintf("cryptsetup luksOpen /dev/%s %s --key-file ./%s", p.Path, p.Label, luksFile),
+	}, command.ShellCommand{
+		Label: "Delete LUKS key file",
+		Cmd:   fmt.Sprintf("shred ./%s", luksFile),
+	})
+
+	cmd := command.ShellCommand{
+		Label: fmt.Sprintf("Partition /dev/%s to %s", p.Path, p.Format),
+	}
+
+	switch p.Format {
+	case Ext4:
+		cmd.Cmd = fmt.Sprintf("mkfs.ext4 /dev/mapper/%s", p.Label)
+	case Fat32:
+		cmd.Cmd = fmt.Sprintf("mkfs.fat -F32 /dev/mapper/%s", p.Label)
+	default:
+		log.Panicf("unrecognized filesystem %s! Aborting... ", p.Format)
+	}
+
+	cmds = append(cmds, cmd)
+
+	return
+}
+
 func MakeFilesystemCommand(p Partition) (cmds []command.Command) {
 	cmd := command.ShellCommand{
 		Label: fmt.Sprintf("Partition /dev/%s to %s", p.Path, p.Format),
@@ -198,7 +238,11 @@ func (d Disk) Commands(boot BootForm) (cmds []command.Command) {
 	}
 
 	for _, p := range d.Partitions {
-		cmds = append(cmds, MakeFilesystemCommand(p)...)
+		if d.Encrypt && !p.Bootable {
+			cmds = append(cmds, MakeEncryptedFilesystemCommand(p, d.EncryptionPasswd)...)
+		} else {
+			cmds = append(cmds, MakeFilesystemCommand(p)...)
+		}
 	}
 
 	return

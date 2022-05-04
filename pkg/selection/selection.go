@@ -65,6 +65,54 @@ func SelectDisk(selection Selection) (Selection, error) {
 	return selection, nil
 }
 
+func SelectDiskEncryption(sel Selection) (Selection, error) {
+	prompt := promptui.Select{
+		Label: "Do you want to encrypt that disk?",
+		Items: []string{"Yes", "No"},
+		Size:  2,
+	}
+
+	i, _, err := prompt.Run()
+
+	if err != nil {
+		return Selection{}, fmt.Errorf("selecting disk encryption failed: %s", err.Error())
+	}
+
+	if i == 1 { // No
+		return sel, nil
+	}
+
+	sel.Disk.Encrypt = true
+
+	prompt2 := promptui.Prompt{
+		HideEntered: true,
+		Mask:        '*',
+	}
+
+	pwd1, pwd2 := "a", "b"
+	for pwd1 != pwd2 {
+		prompt2.Label = "Choose Password"
+		pwd1, err = prompt2.Run()
+		if err != nil {
+			return Selection{}, fmt.Errorf("deciding Encryption Password failed: %s", err.Error())
+		}
+
+		prompt2.Label = "Repeat Password"
+		pwd2, err = prompt2.Run()
+		if err != nil {
+			return Selection{}, fmt.Errorf("deciding Encryption Password failed: %s", err.Error())
+		}
+
+		if pwd1 != pwd2 {
+			fmt.Println("Passwords don't match! Try again!")
+		}
+	}
+
+	sel.Disk.EncryptionPasswd = pwd1
+
+	return sel, nil
+}
+
 func SelectUsername(selection Selection) (Selection, error) {
 	validUser, _ := regexp.Compile("^[a-z_][a-z0-9_-]*[$]?$")
 
@@ -217,8 +265,9 @@ type Selection struct {
 }
 
 func (s Selection) String() (res string) {
-	return fmt.Sprintf("Disk:\t\t%s\nHostname:\t%s\nTimezone:\t%s\nDesktop:\t%s\nKeyboard:\t%s\nUsername:\t%s\nPassword:\t%s",
+	return fmt.Sprintf("Disk:\t\t%s\nEncyrpt disk:\t%v\nHostname:\t%s\nTimezone:\t%s\nDesktop:\t%s\nKeyboard:\t%s\nUsername:\t%s\nPassword:\t%s",
 		s.Disk.Name,
+		s.Disk.Encrypt,
 		s.Hostname,
 		s.Timezone,
 		s.DesktopEnviroment,

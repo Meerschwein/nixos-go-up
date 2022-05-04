@@ -34,7 +34,7 @@ type CommandGenerator func(sel selection.Selection) (cmds []command.Command)
 
 func main() {
 	flag.Parse()
-	
+
 	if !util.WasRunAsRoot() {
 		fmt.Println("Please run as root!")
 		return
@@ -44,20 +44,29 @@ func main() {
 		util.ExitIfErr(fmt.Errorf("something is was found at /mnt"))
 	}
 
+
 	selectionSteps := []selection.SelectionStep{
 		selection.SelectDisk,
+	}
+
+	// BIOS encryption is not supported at the moment
+	if util.IsUefiSystem() {
+		selectionSteps = append(selectionSteps, selection.SelectDiskEncryption)
+	}
+
+	selectionSteps = append(selectionSteps,
 		selection.SelectHostname,
 		selection.SelectTimezone,
 		selection.SelectDesktopEnviroment,
 		selection.SelectKeyboardLayout,
 		selection.SelectUsername,
 		selection.SelectPassword,
-	}
+	)
 
-	input, err := GetSelections(selectionSteps)
+	sel, err := GetSelections(selectionSteps)
 	util.ExitIfErr(err)
 
-	fmt.Printf("Your Selection so far:\n%s\n", input)
+	fmt.Printf("Your Selection so far:\n%v\n", sel)
 
 	cont := selection.ConfirmationDialog("Are you sure you want to continue?")
 	if !cont {
@@ -65,30 +74,9 @@ func main() {
 		return
 	}
 
-	uefiGenerators := []CommandGenerator{
-		FormatDiskEfi,
-		WaitUntilFormattingSuccess,
-		RefreshBlockIndices,
-		MountRootToMnt, UefiMountBootDir,
-		GenerateDefaultNixosConfig,
-		NixosInstall,
-	}
+	gens := MakeCommandGenerators(sel)
 
-	biosGenerators := []CommandGenerator{
-		FormatDiskLegacy,
-		WaitUntilFormattingSuccess,
-		RefreshBlockIndices,
-		MountRootToMnt,
-		GenerateDefaultNixosConfig,
-		NixosInstall,
-	}
-
-	var cmds []command.Command
-	if util.IsUefiSystem() {
-		cmds = GenerateCommands(input, uefiGenerators)
-	} else {
-		cmds = GenerateCommands(input, biosGenerators)
-	}
+	cmds := GenerateCommands(sel, gens)
 
 	if dryRun {
 		command.DryRun(cmds)
@@ -97,19 +85,58 @@ func main() {
 	}
 }
 
-func GenerateCommands(sel selection.Selection, generators []CommandGenerator) (cmds []command.Command) {
-	for _, gen := range generators {
-		cmds = append(cmds, gen(sel)...)
-	}
-	return
-}
-
 func GetSelections(steps []selection.SelectionStep) (sel selection.Selection, err error) {
 	for _, step := range steps {
 		sel, err = step(sel)
 		if err != nil {
 			return
 		}
+	}
+	return
+}
+
+func MakeCommandGenerators(sel selection.Selection) (generators []CommandGenerator) {
+	if util.IsUefiSystem() {
+		generators = append(generators, FormatDiskEfi)
+	} else {
+		generators = append(generators, FormatDiskLegacy)
+	}
+
+	generators = append(generators,
+		WaitUntilFormattingSuccess,
+		RefreshBlockIndices,
+		func(_ selection.Selection) []command.Command {
+			return []command.Command{command.FunctionCommand{
+				Label: "Sleep 2s",
+				Func: func() bool {
+					time.Sleep(2 * time.Second)
+					return true
+				},
+			}}
+		},
+	)
+
+	if sel.Disk.Encrypt {
+		generators = append(generators, MountEncryptedRootToMnt)
+	} else {
+		generators = append(generators, MountRootToMnt)
+	}
+
+	if util.IsUefiSystem() {
+		generators = append(generators, UefiMountBootDir)
+	}
+
+	generators = append(generators,
+		GenerateDefaultNixosConfig,
+		NixosInstall,
+	)
+
+	return
+}
+
+func GenerateCommands(sel selection.Selection, generators []CommandGenerator) (cmds []command.Command) {
+	for _, gen := range generators {
+		cmds = append(cmds, gen(sel)...)
 	}
 	return
 }
@@ -207,9 +234,19 @@ func WaitUntilFormattingSuccess(sel selection.Selection) (cmds []command.Command
 	return
 }
 
-func MountRootToMnt(_ selection.Selection) (cmds []command.Command) {
+func MountEncryptedRootToMnt(_ selection.Selection) (cmds []command.Command) {
 	cmds = append(cmds, command.ShellCommand{
-		Label: fmt.Sprintf("Mounting %s at /mnt", ROOTLABEL),
+		Label: fmt.Sprintf("Mounting /dev/mapper/%s at /mnt", ROOTLABEL),
+		Cmd:   fmt.Sprintf("mount /dev/mapper/%s /mnt", ROOTLABEL),
+	})
+
+	return
+}
+
+func MountRootToMnt(sel selection.Selection) (cmds []command.Command) {
+
+	cmds = append(cmds, command.ShellCommand{
+		Label: fmt.Sprintf("Mounting /dev/disk/by-label/%s at /mnt", ROOTLABEL),
 		Cmd:   fmt.Sprintf("mount /dev/disk/by-label/%s /mnt", ROOTLABEL),
 	})
 
@@ -252,11 +289,17 @@ func GenerateCustomNixosConfig(sel selection.Selection) (string, error) {
 	}
 
 	if util.IsUefiSystem() {
-		replacements = append(replacements, [2]string{"$GRUB_DEVICE_C$", "# "})
+		replacements = append(replacements, [2]string{"$BOOTLOADER$", "boot.loader.systemd-boot.enable = true;"})
 		replacements = append(replacements, [2]string{"$GRUB_DEVICE$", "nodev"})
 	} else {
-		replacements = append(replacements, [2]string{"$GRUB_DEVICE_C$", ""})
+		replacements = append(replacements, [2]string{"$BOOTLOADER$", "boot.loader.grub.enable = true;\n  boot.loader.grub.version = 2;"})
 		replacements = append(replacements, [2]string{"$GRUB_DEVICE$", "/dev/" + sel.Disk.Name})
+	}
+
+	if sel.Disk.Encrypt {
+		replacements = append(replacements, [2]string{"$GRUB_ENCRYTION$", ""})
+	} else {
+		replacements = append(replacements, [2]string{"$GRUB_ENCRYTION$", "# "})
 	}
 
 	dataB, err := os.ReadFile("configuration-template.nix")
@@ -293,10 +336,10 @@ func GenerateDefaultNixosConfig(sel selection.Selection) (cmds []command.Command
 	return
 }
 
-func UefiMountBootDir(_ selection.Selection) (cmds []command.Command) {
+func UefiMountBootDir(sel selection.Selection) (cmds []command.Command) {
 	cmds = append(cmds, command.ShellCommand{
 		Label: "Create /mnt/boot",
-		Cmd:   "mkdir -p/mnt/boot",
+		Cmd:   "mkdir -p /mnt/boot",
 	})
 
 	cmds = append(cmds, command.ShellCommand{

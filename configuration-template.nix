@@ -14,14 +14,15 @@
   ];
 
   # Use the GRUB 2 boot loader.
-  boot.loader.grub.enable = true;
-  boot.loader.grub.version = 2;
+  $BOOTLOADER$
+  
 
   # boot.loader.grub.efiSupport = true;
   # boot.loader.grub.efiInstallAsRemovable = true;
   # boot.loader.efi.efiSysMountPoint = "/boot/efi";
   # Define on which hard drive you want to install Grub.
-  $GRUB_DEVICE_C$boot.loader.grub.device = "$GRUB_DEVICE$"; # or "nodev" for efi only
+  boot.loader.grub.device = "$GRUB_DEVICE$"; # or "nodev" for efi only
+  $GRUB_ENCRYTION$boot.loader.grub.enableCryptodisk = true;
 
   networking.hostName = "$HOSTNAME$"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
