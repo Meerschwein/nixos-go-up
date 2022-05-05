@@ -84,8 +84,8 @@ func MakeEncryptedFilesystemCommand(p disk.Partition, encryptionPasswd string) (
 	luksFile := ".luks-key"
 	cmds = append(cmds, FunctionCommand{
 		Label: "Generate LUKS key file",
-		Func: func() bool {
-			return nil == os.WriteFile("./"+luksFile, []byte(encryptionPasswd), 0644)
+		Func: func() (string, error) {
+			return "", os.WriteFile("./"+luksFile, []byte(encryptionPasswd), 0644)
 		},
 	}, ShellCommand{
 		Label: fmt.Sprintf("Encrypt %s", p.Path),

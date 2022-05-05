@@ -1,11 +1,13 @@
 package command
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/Meerschwein/nixos-go-up/pkg/selection"
@@ -64,7 +66,7 @@ func (c ShellCommand) DryRun() string {
 
 type FunctionCommand struct {
 	Label string
-	Func  func() (success bool)
+	Func  func() (string, error)
 }
 
 func (c FunctionCommand) Message() string {
@@ -72,11 +74,11 @@ func (c FunctionCommand) Message() string {
 }
 
 func (c FunctionCommand) Execute() (string, error) {
-	success := c.Func()
-	if !success {
-		return "", fmt.Errorf("unsuccessfull")
+	out, err := c.Func()
+	if err != nil {
+		return "", fmt.Errorf(out)
 	}
-	return "", nil
+	return out, nil
 }
 
 func (c FunctionCommand) DryRun() string {
@@ -117,9 +119,9 @@ func (c RepeatedFunctionCommand) DryRun() string {
 func Sleep(t time.Duration) Command {
 	return FunctionCommand{
 		Label: fmt.Sprintf("Sleep for %f s", t.Seconds()),
-		Func: func() bool {
+		Func: func() (string, error) {
 			time.Sleep(t)
-			return true
+			return "slept", nil
 		},
 	}
 }
@@ -237,11 +239,26 @@ func NixosInstall(_ selection.Selection) (cmds []Command) {
 	return
 }
 
+type Replacement struct {
+	Bootloader           string
+	GrubDevice           string
+	Hostname             string
+	Timezone             string
+	NetworkingInterfaces string
+	Desktopmanager       string
+	KeyboardLayout       string
+	Username             string
+	PasswordHash         string
+}
+
 func GenerateCustomNixosConfig(sel selection.Selection) (string, error) {
+	replacement := Replacement{}
+
 	pasHash, err := PasswordHash(sel.Password)
 	if err != nil {
 		return "", err
 	}
+	replacement.PasswordHash = pasHash
 
 	interfaces, err := util.GetInterfaces()
 	if err != nil {
@@ -252,42 +269,31 @@ func GenerateCustomNixosConfig(sel selection.Selection) (string, error) {
 	for _, inter := range interfaces {
 		inters += "networking.interfaces." + inter + ".useDHCP = true;\n  "
 	}
+	replacement.NetworkingInterfaces = inters
 
-	replacements := [][2]string{
-		{"$HOSTNAME$", sel.Hostname},
-		{"$TIMEZONE$", sel.Timezone},
-		{"$KEYBOARD_LAYOUT$", sel.KeyboardLayout},
-		{"$USERNAME$", sel.Username},
-		{"$PASSWORD$", pasHash},
-		{"$NETWORKING_INTERFACES$", inters},
-		{"$DESKTOP_MANAGER$", selection.NixConfiguration(sel.DesktopEnviroment)},
-	}
+	replacement.Hostname = sel.Hostname
+	replacement.Timezone = sel.Timezone
+	replacement.KeyboardLayout = sel.KeyboardLayout
+	replacement.Username = sel.Username
+	replacement.Desktopmanager = selection.NixConfiguration(sel.DesktopEnviroment)
 
 	if util.IsUefiSystem() {
-		replacements = append(replacements, [2]string{"$BOOTLOADER$", "boot.loader.systemd-boot.enable = true;"})
-		replacements = append(replacements, [2]string{"$GRUB_DEVICE$", "nodev"})
+		replacement.Bootloader = "boot.loader.systemd-boot.enable = true;"
+		replacement.GrubDevice = "nodev"
 	} else {
-		replacements = append(replacements, [2]string{"$BOOTLOADER$", "boot.loader.grub.enable = true;\n  boot.loader.grub.version = 2;"})
-		replacements = append(replacements, [2]string{"$GRUB_DEVICE$", "/dev/" + sel.Disk.Name})
+		replacement.Bootloader = "boot.loader.grub.enable = true;\n  boot.loader.grub.version = 2;"
+		replacement.GrubDevice = "/dev/" + sel.Disk.Name
 	}
 
-	if sel.Disk.Encrypt {
-		replacements = append(replacements, [2]string{"$GRUB_ENCRYTION$", ""})
-	} else {
-		replacements = append(replacements, [2]string{"$GRUB_ENCRYTION$", "# "})
-	}
-
-	dataB, err := os.ReadFile("configuration-template.nix")
+	t, err := template.New("NixOS configuration").ParseFiles("configuration-template.gotmpl")
 	if err != nil {
-		return "", err
+		return "ERROR parsing template", err
 	}
 
-	data := string(dataB)
-	for _, rep := range replacements {
-		data = strings.Replace(data, rep[0], rep[1], 1)
-	}
+	var data bytes.Buffer
+	t.Execute(&data, replacement)
 
-	return data, nil
+	return data.String(), nil
 }
 
 func GenerateDefaultNixosConfig(sel selection.Selection) (cmds []Command) {
@@ -298,13 +304,13 @@ func GenerateDefaultNixosConfig(sel selection.Selection) (cmds []Command) {
 
 	cmds = append(cmds, FunctionCommand{
 		Label: "Generate custom nixos configuration file",
-		Func: func() (success bool) {
+		Func: func() (string, error) {
 			config, err := GenerateCustomNixosConfig(sel)
 			if err != nil {
-				return false
+				return "", err
 			}
 			err = os.WriteFile("/mnt/etc/nixos/configuration.nix", []byte(config), 0644)
-			return err == nil
+			return config, err
 		},
 	})
 

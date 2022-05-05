@@ -14,27 +14,26 @@
   ];
 
   # Use the GRUB 2 boot loader.
-  $BOOTLOADER$
+  {{ .Bootloader }}
   
 
   # boot.loader.grub.efiSupport = true;
   # boot.loader.grub.efiInstallAsRemovable = true;
   # boot.loader.efi.efiSysMountPoint = "/boot/efi";
   # Define on which hard drive you want to install Grub.
-  boot.loader.grub.device = "$GRUB_DEVICE$"; # or "nodev" for efi only
-  $GRUB_ENCRYTION$boot.loader.grub.enableCryptodisk = true;
+  boot.loader.grub.device = "{{ .GrubDevice }}"; # or "nodev" for efi only
 
-  networking.hostName = "$HOSTNAME$"; # Define your hostname.
+  networking.hostName = "{{ .Hostname }}"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
 
   # Set your time zone.
-  time.timeZone = "$TIMEZONE$";
+  time.timeZone = "{{ .Timezone }}";
 
   # The global useDHCP flag is deprecated, therefore explicitly set to false here.
   # Per-interface useDHCP will be mandatory in the future, so this generated config
   # replicates the default behaviour.
   networking.useDHCP = false;
-  $NETWORKING_INTERFACES$
+  {{ .NetworkingInterfaces }}
 
   # Configure network proxy if necessary
   # networking.proxy.default = "http://user:password@proxy:port/";
@@ -52,11 +51,11 @@
 
 
   # Enable the Desktop Environment.
-  $DESKTOP_MANAGER$
+  {{ .Desktopmanager }}
 
 
   # Configure keymap in X11
-  services.xserver.layout = "$KEYBOARD_LAYOUT$";
+  services.xserver.layout = "{{ .KeyboardLayout }}";
   # services.xserver.xkbOptions = "eurosign:e";
 
   # Enable CUPS to print documents.
@@ -69,10 +68,10 @@
   # Enable touchpad support (enabled default in most desktopManager).
   # services.xserver.libinput.enable = true;
 
-  users.users."$USERNAME$" = {
+  users.users."{{ .Username }}" = {
     isNormalUser = true;
     extraGroups = [ "wheel" "networkmanager" ];
-    hashedPassword = "$PASSWORD$";
+    hashedPassword = "{{ .PasswordHash }}";
   };
 
   # users.users.jane = {
