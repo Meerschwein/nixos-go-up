@@ -9,12 +9,14 @@ import (
 func DiskGen() *rapid.Generator {
 	return rapid.Custom(func(t *rapid.T) disk.Disk {
 		return disk.Disk{
-			Name:       rapid.String().Draw(t, "Disk_Name").(string),
-			Vendor:     rapid.String().Draw(t, "Disk_Vendor").(string),
-			Model:      rapid.String().Draw(t, "Disk_Model").(string),
-			SizeGB:     rapid.Int().Draw(t, "Disk_SizeGB").(int),
-			Table:      rapid.SampledFrom([]disk.Table{disk.Gpt, disk.Mbr}).Draw(t, "Disk_Table").(disk.Table),
-			Partitions: rapid.SliceOfN(PartitionGen(), 0, 5).Draw(t, "Disk_Partitions").([]disk.Partition),
+			Name:             rapid.String().Draw(t, "Disk_Name").(string),
+			Vendor:           rapid.String().Draw(t, "Disk_Vendor").(string),
+			Model:            rapid.String().Draw(t, "Disk_Model").(string),
+			SizeGB:           rapid.Int().Draw(t, "Disk_SizeGB").(int),
+			Encrypt:          rapid.Bool().Draw(t, "Disk_Encrypt").(bool),
+			EncryptionPasswd: rapid.String().Draw(t, "Disk_EncryptionPasswd").(string),
+			Table:            rapid.SampledFrom([]disk.Table{disk.Gpt, disk.Mbr}).Draw(t, "Disk_Table").(disk.Table),
+			Partitions:       rapid.SliceOfN(PartitionGen(), 0, 5).Draw(t, "Disk_Partitions").([]disk.Partition),
 		}
 	})
 }
@@ -45,5 +47,11 @@ func SelectionGen() *rapid.Generator {
 			DesktopEnviroment: rapid.SampledFrom([]selection.DesktopEnviroment{selection.GNOME, selection.XFCE}).Draw(t, "DesktopEnviroment").(selection.DesktopEnviroment),
 			KeyboardLayout:    rapid.String().Draw(t, "KeyboardLayout").(string),
 		}
+	})
+}
+
+func FirmwareGen() *rapid.Generator {
+	return rapid.Custom(func(t *rapid.T) disk.Firmware {
+		return rapid.SampledFrom([]disk.Firmware{disk.UEFI, disk.BIOS}).Draw(t, "Firmware").(disk.Firmware)
 	})
 }

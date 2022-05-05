@@ -12,12 +12,6 @@ import (
 	"pgregory.net/rapid"
 )
 
-var (
-	bootFormGen = rapid.Custom(func(t *rapid.T) disk.BootForm {
-		return rapid.SampledFrom([]disk.BootForm{disk.UEFI, disk.BIOS}).Draw(t, "BootForm").(disk.BootForm)
-	})
-)
-
 func TestDisk_PartitionName_Properties(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		d := generators.DiskGen().Draw(t, "Disk").(disk.Disk)
@@ -85,46 +79,4 @@ func TestDisk_PartitionName_Unit(t *testing.T) {
 
 		assert.Equal(t, test.Expected, actual)
 	}
-}
-
-func TestDisk_TableCommands_Properties(t *testing.T) {
-	rapid.Check(t, func(t *rapid.T) {
-		d1 := generators.DiskGen().Draw(t, "Disk").(disk.Disk)
-		d2 := generators.DiskGen().Filter(func(d disk.Disk) bool {
-			return d.Table != d1.Table
-		}).Draw(t, "Disk").(disk.Disk)
-
-		cmds := d1.TableCommands()
-		cmds2 := d2.TableCommands()
-
-		require.NotEmpty(t, cmds, "Didn't get any commands")
-		require.NotEqual(t, cmds, cmds2, "Different Tables got the same commands")
-	})
-}
-
-func TestDisk_MakeFilesystemCommand_Properties(t *testing.T) {
-	rapid.Check(t, func(t *rapid.T) {
-		part := generators.PartitionGen().Draw(t, "Partition").(disk.Partition)
-		part2 := generators.PartitionGen().Filter(func(p disk.Partition) bool {
-			return p.Format != part.Format
-		}).Draw(t, "Partition 2").(disk.Partition)
-
-		cmds := disk.MakeFilesystemCommand(part)
-		cmds2 := disk.MakeFilesystemCommand(part2)
-
-		require.NotEmpty(t, cmds, "Didn't get any commands")
-		require.NotEqual(t, cmds, cmds2, "Different Formats got the same commands")
-	})
-}
-
-func TestDisk_Commands_Properties(t *testing.T) {
-	rapid.Check(t, func(t *rapid.T) {
-		d := generators.DiskGen().Draw(t, "Disk").(disk.Disk)
-
-		bf1 := bootFormGen.Draw(t, "BootForm").(disk.BootForm)
-
-		cmds := d.Commands(bf1)
-
-		require.NotEmpty(t, cmds, "Didn't get any commands")
-	})
 }

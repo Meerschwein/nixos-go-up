@@ -276,3 +276,13 @@ func (s Selection) String() (res string) {
 		strings.Repeat("*", len(s.Password)),
 	)
 }
+
+func GetSelections(steps []SelectionStep) (sel Selection, err error) {
+	for _, step := range steps {
+		sel, err = step(sel)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
