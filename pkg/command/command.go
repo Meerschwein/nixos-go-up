@@ -285,13 +285,14 @@ func GenerateCustomNixosConfig(sel selection.Selection) (string, error) {
 		replacement.GrubDevice = "/dev/" + sel.Disk.Name
 	}
 
-	t, err := template.New("NixOS configuration").ParseFiles("configuration-template.gotmpl")
-	if err != nil {
-		return "ERROR parsing template", err
-	}
+	t := template.Must(template.New("configuration-template.gotmpl").ParseFiles("configuration-template.gotmpl"))
 
-	var data bytes.Buffer
-	t.Execute(&data, replacement)
+	data := bytes.Buffer{}
+	err = t.Execute(&data, replacement)
+
+	if err != nil {
+		return "ERROR parsing the template", err
+	}
 
 	return data.String(), nil
 }
