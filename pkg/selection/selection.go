@@ -15,23 +15,27 @@ type DesktopEnviroment string
 const (
 	XFCE  DesktopEnviroment = "xfce"
 	GNOME DesktopEnviroment = "gnome"
+	NONE  DesktopEnviroment = "none"
 )
 
 func getDesktopEnviroments() []DesktopEnviroment {
-	return []DesktopEnviroment{XFCE, GNOME}
+	return []DesktopEnviroment{XFCE, GNOME, NONE}
 }
 
-func NixConfiguration(dm DesktopEnviroment) string {
+func NixConfiguration(dm DesktopEnviroment) (config string) {
 	switch dm {
 	case XFCE:
-		return "services.xserver.desktopManager.xfce.enable = true;\n  " +
+		config = "services.xserver.desktopManager.xfce.enable = true;\n  " +
 			"services.xserver.displayManager.defaultSession = \"xfce\";"
 	case GNOME:
-		return "services.xserver.desktopManager.gnome.enable = true;\n  " +
+		config = "services.xserver.desktopManager.gnome.enable = true;\n  " +
 			"services.xserver.displayManager.gdm.enable = true;"
+	case NONE:
+		config = ""
+	default:
+		panic("Unknown Desktop Enviroment: " + string(dm) + "!")
 	}
-
-	panic("Unknown Desktop Enviroment: " + string(dm) + "!")
+	return
 }
 
 func ConfirmationDialog(label string) bool {
@@ -109,6 +113,24 @@ func SelectDiskEncryption(sel Selection) (Selection, error) {
 	}
 
 	sel.Disk.EncryptionPasswd = pwd1
+
+	prompt = promptui.Select{
+		Label: "Do you want to use a Yubikey?",
+		Items: []string{"Yes", "No"},
+		Size:  2,
+	}
+
+	i, _, err = prompt.Run()
+
+	if err != nil {
+		return Selection{}, fmt.Errorf("selecting yubikey failed: %s", err.Error())
+	}
+
+	if i == 1 { // No
+		return sel, nil
+	}
+
+	sel.Disk.Yubikey = true
 
 	return sel, nil
 }

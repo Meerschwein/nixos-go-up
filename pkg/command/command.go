@@ -10,6 +10,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/Meerschwein/nixos-go-up/pkg/disk"
 	"github.com/Meerschwein/nixos-go-up/pkg/selection"
 	"github.com/Meerschwein/nixos-go-up/pkg/util"
 	"github.com/Meerschwein/nixos-go-up/pkg/vars"
@@ -53,36 +54,12 @@ func (c ShellCommand) Message() string {
 }
 
 func (c ShellCommand) Execute() (string, error) {
-	s := strings.Split(c.Cmd, " ")
-	name := s[0]
-	args := s[1:]
-	out, err := exec.Command(name, args...).Output()
+	out, err := exec.Command("bash", "-c", c.Cmd).CombinedOutput()
 	return string(out), err
 }
 
 func (c ShellCommand) DryRun() string {
 	return c.Cmd
-}
-
-type FunctionCommand struct {
-	Label string
-	Func  func() (string, error)
-}
-
-func (c FunctionCommand) Message() string {
-	return c.Label
-}
-
-func (c FunctionCommand) Execute() (string, error) {
-	out, err := c.Func()
-	if err != nil {
-		return "", fmt.Errorf(out)
-	}
-	return out, nil
-}
-
-func (c FunctionCommand) DryRun() string {
-	return "Ran a function"
 }
 
 type RepeatedFunctionCommand struct {
@@ -116,13 +93,10 @@ func (c RepeatedFunctionCommand) DryRun() string {
 	return fmt.Sprintf("Ran a function at worst %d times", c.Limit)
 }
 
-func Sleep(t time.Duration) Command {
-	return FunctionCommand{
-		Label: fmt.Sprintf("Sleep for %f s", t.Seconds()),
-		Func: func() (string, error) {
-			time.Sleep(t)
-			return "slept", nil
-		},
+func Sleep(secs int) Command {
+	return ShellCommand{
+		Label: fmt.Sprintf("Sleep for %d seconds", secs),
+		Cmd:   fmt.Sprintf("sleep %ds", secs),
 	}
 }
 
@@ -140,10 +114,8 @@ func MakeCommandGenerators(sel selection.Selection) (generators []CommandGenerat
 	}
 
 	generators = append(generators,
-		WaitUntilFormattingSuccess,
-		RefreshBlockIndices,
-		func(_ selection.Selection) []Command {
-			return []Command{Sleep(2 * time.Second)}
+		func(sel selection.Selection) (selection.Selection, []Command) {
+			return sel, []Command{Sleep(5)}
 		},
 	)
 
@@ -157,19 +129,21 @@ func MakeCommandGenerators(sel selection.Selection) (generators []CommandGenerat
 		generators = append(generators, UefiMountBootDir)
 	}
 
-	generators = append(generators,
-		GenerateDefaultNixosConfig,
-		NixosInstall,
-	)
+	generators = append(generators, GenerateNixosConfig)
+
+	generators = append(generators, NixosInstall)
 
 	return
 }
 
-type CommandGenerator func(sel selection.Selection) (cmds []Command)
+type CommandGenerator func(sel selection.Selection) (s selection.Selection, cmds []Command)
 
 func GenerateCommands(sel selection.Selection, generators []CommandGenerator) (cmds []Command) {
+	loopSel := sel
 	for _, gen := range generators {
-		cmds = append(cmds, gen(sel)...)
+		sel, c := gen(loopSel)
+		loopSel = sel
+		cmds = append(cmds, c...)
 	}
 	return
 }
@@ -180,6 +154,16 @@ func Run(name string, args ...string) error {
 		fmt.Println(string(out))
 	}
 	return err
+}
+
+func Run2(cmd string) (string, error) {
+	if vars.DryRun {
+		return cmd, nil
+	} else {
+		out, err := exec.Command("bash", "-c", cmd).Output()
+		return string(out), err
+	}
+
 }
 
 func RunWithOutput(name string, args ...string) (string, error) {
@@ -196,7 +180,7 @@ func PasswordHash(password string) (string, error) {
 	return strings.TrimSpace(pass), err
 }
 
-func WaitUntilFormattingSuccess(sel selection.Selection) (cmds []Command) {
+func WaitUntilFormattingSuccess(sel selection.Selection) (s selection.Selection, cmds []Command) {
 	cmds = append(cmds, RepeatedFunctionCommand{
 		Label: "Wait until all partitions have appeared",
 		Func: func() bool {
@@ -208,35 +192,34 @@ func WaitUntilFormattingSuccess(sel selection.Selection) (cmds []Command) {
 		Wait:  1 * time.Second,
 	})
 
-	return
+	return sel, cmds
 }
 
-func MountEncryptedRootToMnt(_ selection.Selection) (cmds []Command) {
+func MountEncryptedRootToMnt(sel selection.Selection) (s selection.Selection, cmds []Command) {
 	cmds = append(cmds, ShellCommand{
 		Label: fmt.Sprintf("Mounting /dev/mapper/%s at /mnt", ROOTLABEL),
 		Cmd:   fmt.Sprintf("mount /dev/mapper/%s /mnt", ROOTLABEL),
 	})
 
-	return
+	return sel, cmds
 }
 
-func MountRootToMnt(sel selection.Selection) (cmds []Command) {
-
+func MountRootToMnt(sel selection.Selection) (s selection.Selection, cmds []Command) {
 	cmds = append(cmds, ShellCommand{
 		Label: fmt.Sprintf("Mounting /dev/disk/by-label/%s at /mnt", ROOTLABEL),
 		Cmd:   fmt.Sprintf("mount /dev/disk/by-label/%s /mnt", ROOTLABEL),
 	})
 
-	return
+	return sel, cmds
 }
 
-func NixosInstall(_ selection.Selection) (cmds []Command) {
+func NixosInstall(sel selection.Selection) (s selection.Selection, cmds []Command) {
 	cmds = append(cmds, ShellCommand{
 		Label: "Running nixos-install",
 		Cmd:   "nixos-install --no-root-passwd",
 	})
 
-	return
+	return sel, cmds
 }
 
 type Replacement struct {
@@ -285,7 +268,7 @@ func GenerateCustomNixosConfig(sel selection.Selection) (string, error) {
 		replacement.GrubDevice = "/dev/" + sel.Disk.Name
 	}
 
-	t := template.Must(template.New("configuration-template.gotmpl").ParseFiles("configuration-template.gotmpl"))
+	t := template.Must(template.New("nixosconfiguration").Parse(NixOSConfiguration()))
 
 	data := bytes.Buffer{}
 	err = t.Execute(&data, replacement)
@@ -297,28 +280,62 @@ func GenerateCustomNixosConfig(sel selection.Selection) (string, error) {
 	return data.String(), nil
 }
 
-func GenerateDefaultNixosConfig(sel selection.Selection) (cmds []Command) {
+func GenerateNixosConfig(sel selection.Selection) (s selection.Selection, cmds []Command) {
 	cmds = append(cmds, ShellCommand{
 		Label: "Generate default nixos configuration at /mnt",
 		Cmd:   "nixos-generate-config --root /mnt",
 	})
 
-	cmds = append(cmds, FunctionCommand{
+	config, _ := GenerateCustomNixosConfig(sel)
+	cmds = append(cmds, ShellCommand{
 		Label: "Generate custom nixos configuration file",
-		Func: func() (string, error) {
-			config, err := GenerateCustomNixosConfig(sel)
-			if err != nil {
-				return "", err
-			}
-			err = os.WriteFile("/mnt/etc/nixos/configuration.nix", []byte(config), 0644)
-			return config, err
-		},
+		Cmd:   fmt.Sprintf("echo '%s' > /mnt/etc/nixos/configuration.nix", config),
 	})
 
-	return
+	if sel.Disk.Yubikey {
+		bootPart := disk.Partition{}
+		storagePart := disk.Partition{}
+		for _, p := range sel.Disk.Partitions {
+			if p.Bootable {
+				bootPart = p
+			} else {
+				storagePart = p
+			}
+		}
+		cmds = append(cmds, ShellCommand{
+			Label: "Modifying hardware-configuration.nix",
+			Cmd: fmt.Sprintf(
+				`echo '// {
+					boot.initrd.kernelModules = [ "vfat" "nls_cp437" "nls_iso8859-1" "usbhid" ];
+					boot.initrd.luks.yubikeySupport = true;
+					boot.initrd.luks.devices = {
+						"%s" = {
+							device = "/dev/%s";
+							preLVM = true;
+							yubikey = {
+								slot = %d;
+								twoFactor = %v;
+								storage = {
+									device = "/dev/%s";
+								};
+							};
+						};
+					};
+				}' >> /mnt/etc/nixos/hardware-configuration.nix`,
+				storagePart.Label,
+				storagePart.Path,
+				2,
+				sel.Disk.EncryptionPasswd != "",
+				bootPart.Path,
+			),
+		})
+
+	}
+
+	return sel, cmds
 }
 
-func UefiMountBootDir(sel selection.Selection) (cmds []Command) {
+func UefiMountBootDir(sel selection.Selection) (s selection.Selection, cmds []Command) {
 	cmds = append(cmds, ShellCommand{
 		Label: "Create /mnt/boot",
 		Cmd:   "mkdir -p /mnt/boot",
@@ -329,10 +346,10 @@ func UefiMountBootDir(sel selection.Selection) (cmds []Command) {
 		Cmd:   fmt.Sprintf("mount /dev/disk/by-label/%s /mnt/boot", BOOTLABEL),
 	})
 
-	return
+	return sel, cmds
 }
 
-func RefreshBlockIndices(sel selection.Selection) (cmds []Command) {
+func RefreshBlockIndices(sel selection.Selection) (s selection.Selection, cmds []Command) {
 	cmds = append(cmds, RepeatedFunctionCommand{
 		Label: "Refresh blockindices to prevent mountung errors",
 		Func: func() bool {
@@ -343,5 +360,5 @@ func RefreshBlockIndices(sel selection.Selection) (cmds []Command) {
 		Wait:  1 * time.Second,
 	})
 
-	return
+	return sel, cmds
 }

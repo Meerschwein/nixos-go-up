@@ -60,8 +60,19 @@ func Test_Functions_Generate_Same_Output(t *testing.T) {
 			return sel.Hostname != sel1.Hostname
 		}).Draw(t, "Selection 2").(selection.Selection)
 
-		require.Equal(t, command.UefiMountBootDir(sel1), command.UefiMountBootDir(sel2), "UefiMountBootDir produces different commands")
-		require.Equal(t, command.MountRootToMnt(sel1), command.MountRootToMnt(sel2), "MountRootToMnt produces different commands")
-		require.Equal(t, command.NixosInstall(sel1), command.NixosInstall(sel2), "NixosInstall produces different commands")
+		funcs := []func(selection.Selection) (selection.Selection, []command.Command){
+			command.UefiMountBootDir,
+			command.MountRootToMnt,
+			command.NixosInstall,
+		}
+
+		for _, f := range funcs {
+			outSel1, outCmds1 := f(sel1)
+			outSel2, outCmds2 := f(sel2)
+
+			require.Equal(t, sel1, outSel1, "Same Selections 1")
+			require.Equal(t, sel2, outSel2, "Same Selections 2")
+			require.Equal(t, outCmds1, outCmds2, "Same Commands")
+		}
 	})
 }

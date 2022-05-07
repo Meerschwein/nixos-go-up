@@ -41,6 +41,7 @@ type Disk struct {
 	Model            string
 	SizeGB           int
 	Encrypt          bool
+	Yubikey          bool
 	EncryptionPasswd string
 
 	Table      Table

@@ -1,19 +1,5 @@
-```bash
-echo "
-{ config, pkgs, ... }:
-{
-  nix = {
-    package = pkgs.nixFlakes;
-    extraOptions = ''
-      experimental-features = nix-command flakes
-    '';
-  };
+To run simpy execute
 
-  imports = [
-    <nixpkgs/nixos/modules/installer/cd-dvd/installation-cd-graphical-gnome.nix>
-  ];
-}
-" | sudo tee /etc/nixos/configuration.nix &&
-sudo nixos-rebuild switch &&
-sudo nix run https://github.com/Meerschwein/nixos-go-up/archive/refs/heads/main.zip
+```bash
+sudo nix-shell https://github.com/meerschwein/nixos-go-up/archive/main.tar.gz
 ```

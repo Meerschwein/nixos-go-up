@@ -18,8 +18,7 @@ func main() {
 	flag.Parse()
 
 	if !util.WasRunAsRoot() {
-		fmt.Println("Please run as root!")
-		return
+		util.ExitIfErr(fmt.Errorf("run as root"))
 	}
 
 	if util.MountIsUsed() && !vars.DryRun {
