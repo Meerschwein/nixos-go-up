@@ -44,7 +44,6 @@ func TestDisk_MakeFilesystemCommand_Properties(t *testing.T) {
 func TestDisk_Commands_Properties(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		d := generators.DiskGen().Draw(t, "Disk").(disk.Disk)
-
 		bf1 := generators.FirmwareGen().Draw(t, "Firmware").(disk.Firmware)
 
 		cmds := command.Commands(d, bf1)

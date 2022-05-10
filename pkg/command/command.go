@@ -10,7 +10,6 @@ import (
 	"github.com/Meerschwein/nixos-go-up/pkg/disk"
 	"github.com/Meerschwein/nixos-go-up/pkg/selection"
 	"github.com/Meerschwein/nixos-go-up/pkg/util"
-	"github.com/Meerschwein/nixos-go-up/pkg/vars"
 )
 
 const (
@@ -20,7 +19,7 @@ const (
 
 type Command interface {
 	Message() string
-	Execute() (string, error)
+	Execute(map[string]string) (key string, val string, err error)
 	DryRun() string
 }
 
@@ -31,28 +30,39 @@ func DryRun(cmds []Command) {
 }
 
 func RunCmds(cmds []Command) {
+	state := make(map[string]string)
 	for _, cmd := range cmds {
-		fmt.Printf("--\n%s\n", cmd.Message())
-		out, err := cmd.Execute()
-		if out != "" {
-			fmt.Println(out)
+		fmt.Printf("-----\n%s\n", cmd.Message())
+		key, val, err := cmd.Execute(state)
+		if val != "" {
+			fmt.Println(val)
+		}
+		if key != "" {
+			state[key] = val
 		}
 		util.ExitIfErr(err)
 	}
 }
 
 type ShellCommand struct {
-	Label string
-	Cmd   string
+	Label    string
+	Cmd      string
+	OutLabel string
 }
 
 func (c ShellCommand) Message() string {
 	return c.Label
 }
 
-func (c ShellCommand) Execute() (string, error) {
-	out, err := exec.Command("bash", "-c", c.Cmd).CombinedOutput()
-	return string(out), err
+func (c ShellCommand) Execute(state map[string]string) (key string, val string, err error) {
+	cmd := c.Cmd
+	for k, v := range state {
+		cmd = strings.ReplaceAll(cmd, "$"+k, v)
+	}
+	out, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+	val = string(out)
+	key = c.OutLabel
+	return
 }
 
 func (c ShellCommand) DryRun() string {
@@ -66,6 +76,12 @@ func Sleep(secs int) Command {
 	}
 }
 
+func SleepG(secs int) CommandGenerator {
+	return func(sel selection.Selection) (selection.Selection, []Command) {
+		return sel, []Command{Sleep(secs)}
+	}
+}
+
 func MakeCommandGenerators(sel selection.Selection) (generators []CommandGenerator) {
 	if util.IsUefiSystem() {
 		generators = append(generators, FormatDiskEfi)
@@ -73,11 +89,7 @@ func MakeCommandGenerators(sel selection.Selection) (generators []CommandGenerat
 		generators = append(generators, FormatDiskLegacy)
 	}
 
-	generators = append(generators,
-		func(sel selection.Selection) (selection.Selection, []Command) {
-			return sel, []Command{Sleep(5)}
-		},
-	)
+	generators = append(generators, SleepG(5))
 
 	if sel.Disk.Encrypt {
 		generators = append(generators, MountEncryptedRootToMnt)
@@ -89,14 +101,15 @@ func MakeCommandGenerators(sel selection.Selection) (generators []CommandGenerat
 		generators = append(generators, UefiMountBootDir)
 	}
 
-	generators = append(generators, GenerateNixosConfig)
-
-	generators = append(generators, NixosInstall)
+	generators = append(generators,
+		GenerateNixosConfig,
+		NixosInstall,
+	)
 
 	return
 }
 
-type CommandGenerator func(sel selection.Selection) (s selection.Selection, cmds []Command)
+type CommandGenerator func(selection.Selection) (selection.Selection, []Command)
 
 func GenerateCommands(sel selection.Selection, generators []CommandGenerator) (cmds []Command) {
 	loopSel := sel
@@ -106,38 +119,6 @@ func GenerateCommands(sel selection.Selection, generators []CommandGenerator) (c
 		cmds = append(cmds, c...)
 	}
 	return
-}
-
-func Run(name string, args ...string) error {
-	out, err := RunWithOutput(name, args...)
-	if string(out) != "" && err == nil {
-		fmt.Println(string(out))
-	}
-	return err
-}
-
-func Run2(cmd string) (string, error) {
-	if vars.DryRun {
-		return cmd, nil
-	} else {
-		out, err := exec.Command("bash", "-c", cmd).Output()
-		return string(out), err
-	}
-
-}
-
-func RunWithOutput(name string, args ...string) (string, error) {
-	if vars.DryRun {
-		return name + " " + strings.Join(args, " "), nil
-	} else {
-		out, err := exec.Command(name, args...).Output()
-		return string(out), err
-	}
-}
-
-func PasswordHash(password string) (string, error) {
-	pass, err := RunWithOutput("mkpasswd", "--method=sha-512", password)
-	return strings.TrimSpace(pass), err
 }
 
 func MountEncryptedRootToMnt(sel selection.Selection) (s selection.Selection, cmds []Command) {
@@ -186,13 +167,8 @@ func GenerateCustomNixosConfig(sel selection.Selection) (string, error) {
 		Desktopmanager: selection.NixConfiguration(sel.DesktopEnviroment),
 		KeyboardLayout: sel.KeyboardLayout,
 		Username:       sel.Username,
+		PasswordHash:   "$USER_PASSWD",
 	}
-
-	pasHash, err := PasswordHash(sel.Password)
-	if err != nil {
-		return "", err
-	}
-	replacement.PasswordHash = pasHash
 
 	interfaces, err := util.GetInterfaces()
 	if err != nil {
@@ -231,6 +207,12 @@ func GenerateNixosConfig(sel selection.Selection) (s selection.Selection, cmds [
 		Cmd:   "nixos-generate-config --root /mnt",
 	})
 
+	cmds = append(cmds, ShellCommand{
+		Label:    "Generate user password hash",
+		Cmd:      fmt.Sprintf("mkpasswd --method=sha-512 '%s' | tr -d ' \\n'", sel.Password),
+		OutLabel: "USER_PASSWD",
+	})
+
 	config, _ := GenerateCustomNixosConfig(sel)
 	cmds = append(cmds, ShellCommand{
 		Label: "Generate custom nixos configuration file",
@@ -238,6 +220,8 @@ func GenerateNixosConfig(sel selection.Selection) (s selection.Selection, cmds [
 	})
 
 	if sel.Disk.Yubikey {
+		// TODO
+		// This is super hacky
 		bootPart := disk.Partition{}
 		storagePart := disk.Partition{}
 		for _, p := range sel.Disk.Partitions {
@@ -269,7 +253,7 @@ func GenerateNixosConfig(sel selection.Selection) (s selection.Selection, cmds [
 				}' >> /mnt/etc/nixos/hardware-configuration.nix`,
 				storagePart.Label,
 				storagePart.Path,
-				2,
+				SLOT,
 				sel.Disk.EncryptionPasswd != "",
 				bootPart.Path,
 			),

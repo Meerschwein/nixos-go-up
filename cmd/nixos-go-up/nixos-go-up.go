@@ -7,11 +7,14 @@ import (
 	"github.com/Meerschwein/nixos-go-up/pkg/command"
 	"github.com/Meerschwein/nixos-go-up/pkg/selection"
 	"github.com/Meerschwein/nixos-go-up/pkg/util"
-	"github.com/Meerschwein/nixos-go-up/pkg/vars"
+)
+
+var (
+	DryRun bool
 )
 
 func init() {
-	flag.BoolVar(&vars.DryRun, "dry-run", false, "dry-run")
+	flag.BoolVar(&DryRun, "dry-run", false, "dry-run")
 }
 
 func main() {
@@ -21,7 +24,7 @@ func main() {
 		util.ExitIfErr(fmt.Errorf("run as root"))
 	}
 
-	if util.MountIsUsed() && !vars.DryRun {
+	if util.MountIsUsed() && !DryRun {
 		util.ExitIfErr(fmt.Errorf("something is was found at /mnt"))
 	}
 
@@ -58,7 +61,7 @@ func main() {
 
 	cmds := command.GenerateCommands(sel, gens)
 
-	if vars.DryRun {
+	if DryRun {
 		command.DryRun(cmds)
 	} else {
 		command.RunCmds(cmds)

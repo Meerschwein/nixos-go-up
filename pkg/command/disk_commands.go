@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/Meerschwein/nixos-go-up/pkg/disk"
 	"github.com/Meerschwein/nixos-go-up/pkg/selection"
@@ -18,6 +17,7 @@ const (
 	ITERATIONS  = 1000000
 	CIPHER      = "aes-xts-plain64"
 	HASH        = "sha512"
+	SLOT        = 2
 )
 
 func Commands(d disk.Disk, boot disk.Firmware) (cmds []Command) {
@@ -134,33 +134,31 @@ func MakeEncryptedFilesystemYubikeyCommand(p disk.Partition, encryptionPasswd st
 	challenge := hex.EncodeToString(challenge_b[:])
 
 	// TODO Figure out slots
-	response, err := Run2(fmt.Sprintf("ykchalresp -2 -x %s 2>/dev/null", challenge))
-	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
+	cmds = append(cmds, ShellCommand{
+		Label:    "Challenge the yubikey to a reponse",
+		Cmd:      fmt.Sprintf("ykchalresp -%d -x %s 2>/dev/null", SLOT, challenge),
+		OutLabel: "YUBI_RESPONSE",
+	})
 
-	luksPass := ""
 	if encryptionPasswd != "" {
-		luksPass, err = Run2(fmt.Sprintf("echo -n '%s' | pbkdf2-sha512 %d %d '%s'", encryptionPasswd, KEYLENGTH/8, ITERATIONS, response))
-		if err != nil {
-			fmt.Println(err.Error())
-			os.Exit(1)
-		}
+		cmds = append(cmds, ShellCommand{
+			Label:    "Hash the yubikey response",
+			Cmd:      fmt.Sprintf("echo -n '%s' | pbkdf2-sha512 %d %d $YUBI_RESPONSE", encryptionPasswd, KEYLENGTH/8, ITERATIONS),
+			OutLabel: "YUBI_LUKS_PASS",
+		})
 	} else {
-		luksPass, err = Run2(fmt.Sprintf("echo '' | pbkdf2-sha512 %d %d '%s'", KEYLENGTH/8, ITERATIONS, response))
-		if err != nil {
-			fmt.Println(err.Error())
-			os.Exit(1)
-		}
+		cmds = append(cmds, ShellCommand{
+			Label:    "Hash the yubikey response",
+			Cmd:      fmt.Sprintf("echo -n '' | pbkdf2-sha512 %d %d $YUBI_RESPONSE", KEYLENGTH/8, ITERATIONS),
+			OutLabel: "YUBI_LUKS_PASS",
+		})
 	}
 
 	// TODO Sometimes crashes
 	cmds = append(cmds, ShellCommand{
 		Label: "Format Cryptsetup",
 		Cmd: fmt.Sprintf(
-			`echo -n "%s" | cryptsetup luksFormat --cipher="%s" --key-size="%d" --hash="%s" --key-file=- "/dev/%s"`,
-			luksPass,
+			`echo -n "$YUBI_LUKS_PASS" | cryptsetup luksFormat --cipher="%s" --key-size="%d" --hash="%s" --key-file=- "/dev/%s"`,
 			CIPHER,
 			KEYLENGTH,
 			HASH,
@@ -171,8 +169,7 @@ func MakeEncryptedFilesystemYubikeyCommand(p disk.Partition, encryptionPasswd st
 	cmds = append(cmds, ShellCommand{
 		Label: "Open Luks",
 		Cmd: fmt.Sprintf(
-			`echo -n "%s" | cryptsetup luksOpen /dev/%s %s --key-file=-`,
-			luksPass,
+			`echo -n "$YUBI_LUKS_PASS" | cryptsetup luksOpen /dev/%s %s --key-file=-`,
 			p.Path,
 			p.Label,
 		),
