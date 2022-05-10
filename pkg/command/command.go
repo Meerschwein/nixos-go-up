@@ -44,6 +44,20 @@ func RunCmds(cmds []Command) {
 	}
 }
 
+func ShellScript(cmds []Command) (script string) {
+	script += "#!/bin/bash\n\n"
+
+	for _, c := range cmds {
+		script += fmt.Sprintf(
+			"# %s\n%s\n\n",
+			c.Message(),
+			c.DryRun(),
+		)
+	}
+
+	return
+}
+
 type ShellCommand struct {
 	Label    string
 	Cmd      string
@@ -66,7 +80,11 @@ func (c ShellCommand) Execute(state map[string]string) (key string, val string, 
 }
 
 func (c ShellCommand) DryRun() string {
-	return c.Cmd
+	cmd := c.Cmd
+	if c.OutLabel != "" {
+		cmd = c.OutLabel + "=$(" + cmd + ")"
+	}
+	return cmd
 }
 
 func Sleep(secs int) Command {
@@ -234,23 +252,24 @@ func GenerateNixosConfig(sel selection.Selection) (s selection.Selection, cmds [
 		cmds = append(cmds, ShellCommand{
 			Label: "Modifying hardware-configuration.nix",
 			Cmd: fmt.Sprintf(
-				`echo '// {
-					boot.initrd.kernelModules = [ "vfat" "nls_cp437" "nls_iso8859-1" "usbhid" ];
-					boot.initrd.luks.yubikeySupport = true;
-					boot.initrd.luks.devices = {
-						"%s" = {
-							device = "/dev/%s";
-							preLVM = true;
-							yubikey = {
-								slot = %d;
-								twoFactor = %v;
-								storage = {
-									device = "/dev/%s";
-								};
-							};
-						};
-					};
-				}' >> /mnt/etc/nixos/hardware-configuration.nix`,
+				`echo '
+// {
+  boot.initrd.kernelModules = [ "vfat" "nls_cp437" "nls_iso8859-1" "usbhid" ];
+  boot.initrd.luks.yubikeySupport = true;
+  boot.initrd.luks.devices = {
+    "%s" = {
+      device = "/dev/%s";
+      preLVM = true;
+      yubikey = {
+        slot = %d;
+        twoFactor = %v;
+        storage = {
+          device = "/dev/%s";
+        };
+      };
+    };
+  };
+}' >> /mnt/etc/nixos/hardware-configuration.nix`,
 				storagePart.Label,
 				storagePart.Path,
 				SLOT,

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 
 	"github.com/Meerschwein/nixos-go-up/pkg/command"
 	"github.com/Meerschwein/nixos-go-up/pkg/selection"
@@ -10,11 +11,15 @@ import (
 )
 
 var (
-	DryRun bool
+	dryRun     bool
+	toScript   bool
+	scriptname string
 )
 
 func init() {
-	flag.BoolVar(&DryRun, "dry-run", false, "dry-run")
+	flag.BoolVar(&dryRun, "dry-run", false, "dry-run")
+	flag.BoolVar(&toScript, "to-script", false, "to-script")
+	flag.StringVar(&scriptname, "script-name", "nixos-install.sh", "script name")
 }
 
 func main() {
@@ -24,7 +29,7 @@ func main() {
 		util.ExitIfErr(fmt.Errorf("run as root"))
 	}
 
-	if util.MountIsUsed() && !DryRun {
+	if util.MountIsUsed() && !dryRun {
 		util.ExitIfErr(fmt.Errorf("something is was found at /mnt"))
 	}
 
@@ -61,8 +66,11 @@ func main() {
 
 	cmds := command.GenerateCommands(sel, gens)
 
-	if DryRun {
+	if dryRun {
 		command.DryRun(cmds)
+	} else if toScript {
+		script := command.ShellScript(cmds)
+		os.WriteFile(scriptname, []byte(script), 0644)
 	} else {
 		command.RunCmds(cmds)
 	}
