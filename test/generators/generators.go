@@ -14,6 +14,7 @@ func DiskGen() *rapid.Generator {
 			Model:            rapid.String().Draw(t, "Disk_Model").(string),
 			SizeGB:           rapid.Int().Draw(t, "Disk_SizeGB").(int),
 			Encrypt:          rapid.Bool().Draw(t, "Disk_Encrypt").(bool),
+			Yubikey:          rapid.Bool().Draw(t, "Disk_Yubikey").(bool),
 			EncryptionPasswd: rapid.String().Draw(t, "Disk_EncryptionPasswd").(string),
 			Table:            rapid.SampledFrom([]disk.Table{disk.Gpt, disk.Mbr}).Draw(t, "Disk_Table").(disk.Table),
 			Partitions:       rapid.SliceOfN(PartitionGen(), 0, 5).Draw(t, "Disk_Partitions").([]disk.Partition),
@@ -44,7 +45,7 @@ func SelectionGen() *rapid.Generator {
 			Timezone:          rapid.String().Draw(t, "Timezone").(string),
 			Username:          rapid.String().Draw(t, "Username").(string),
 			Password:          rapid.String().Draw(t, "Password").(string),
-			DesktopEnviroment: rapid.SampledFrom([]selection.DesktopEnviroment{selection.GNOME, selection.XFCE}).Draw(t, "DesktopEnviroment").(selection.DesktopEnviroment),
+			DesktopEnviroment: rapid.SampledFrom([]selection.DesktopEnviroment{selection.GNOME, selection.XFCE, selection.NONE}).Draw(t, "DesktopEnviroment").(selection.DesktopEnviroment),
 			KeyboardLayout:    rapid.String().Draw(t, "KeyboardLayout").(string),
 		}
 	})

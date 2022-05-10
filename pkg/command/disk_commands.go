@@ -15,7 +15,7 @@ import (
 const (
 	SALT_LENGTH = 16
 	KEYLENGTH   = 512
-	ITERATIONS  = 10000
+	ITERATIONS  = 1000000
 	CIPHER      = "aes-xts-plain64"
 	HASH        = "sha512"
 )
