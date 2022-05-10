@@ -65,7 +65,7 @@ func Commands(d disk.Disk, boot disk.Firmware) (cmds []Command) {
 				cmds = append(cmds, MakeEncryptedFilesystemCommand(p, d.EncryptionPasswd)...)
 			}
 		} else {
-			cmds = append(cmds, MakeFilesystemCommand(p)...)
+			cmds = append(cmds, MakeDiskFormattingCommand(p.Format, "/dev/"+p.Path, p.Label))
 		}
 	}
 
@@ -74,7 +74,7 @@ func Commands(d disk.Disk, boot disk.Firmware) (cmds []Command) {
 
 func TableCommands(d disk.Disk) (cmds []Command) {
 	var cmd ShellCommand
-	switch d.Table {
+	switch d.PartitionTable {
 	case disk.Mbr:
 		cmd = ShellCommand{
 			Label: fmt.Sprintf("Formatting %s to MBR", d.Name),
@@ -86,12 +86,40 @@ func TableCommands(d disk.Disk) (cmds []Command) {
 			Cmd:   "parted -s /dev/" + d.Name + " -- mklabel gpt",
 		}
 	default:
-		log.Panicf("unrecognized partitioning scheme %s! Aborting... ", d.Table)
-		return
+		log.Panicf("unrecognized partitioning scheme %s! Aborting... ", d.PartitionTable)
 	}
 	cmds = append(cmds, cmd)
 
 	return
+}
+
+func MakeDiskFormattingCommand(format disk.Filesystem, path string, label string) Command {
+	labelArgs := ""
+	switch format {
+	case disk.Ext4:
+		labelArgs = "-L " + label
+	case disk.Fat32:
+		labelArgs = "-n " + label
+	default:
+		log.Panicf("unrecognized filesystem %s! Aborting... ", format)
+	}
+	if label == "" {
+		labelArgs = ""
+	}
+
+	cmd := ShellCommand{
+		Label: fmt.Sprintf("Formatting %s to %s", path, format),
+	}
+	switch format {
+	case disk.Ext4:
+		cmd.Cmd = fmt.Sprintf("mkfs.ext4 %s %s", labelArgs, path)
+	case disk.Fat32:
+		cmd.Cmd = fmt.Sprintf("mkfs.fat -F32 %s %s", labelArgs, path)
+	default:
+		log.Panicf("unrecognized filesystem %s! Aborting... ", format)
+	}
+
+	return cmd
 }
 
 func MakeEncryptedFilesystemCommand(p disk.Partition, encryptionPasswd string) (cmds []Command) {
@@ -104,20 +132,7 @@ func MakeEncryptedFilesystemCommand(p disk.Partition, encryptionPasswd string) (
 	},
 	)
 
-	cmd := ShellCommand{
-		Label: fmt.Sprintf("Partition /dev/%s to %s", p.Path, p.Format),
-	}
-
-	switch p.Format {
-	case disk.Ext4:
-		cmd.Cmd = fmt.Sprintf("mkfs.ext4 /dev/mapper/%s", p.Label)
-	case disk.Fat32:
-		cmd.Cmd = fmt.Sprintf("mkfs.fat -F32 /dev/mapper/%s", p.Label)
-	default:
-		log.Panicf("unrecognized filesystem %s! Aborting... ", p.Format)
-	}
-
-	cmds = append(cmds, cmd)
+	cmds = append(cmds, MakeDiskFormattingCommand(p.Format, "/dev/mapper/"+p.Label, ""))
 
 	return
 }
@@ -175,20 +190,7 @@ func MakeEncryptedFilesystemYubikeyCommand(p disk.Partition, encryptionPasswd st
 		),
 	})
 
-	cmd := ShellCommand{
-		Label: fmt.Sprintf("Partition /dev/%s to %s", p.Path, p.Format),
-	}
-
-	switch p.Format {
-	case disk.Ext4:
-		cmd.Cmd = fmt.Sprintf("mkfs.ext4 /dev/mapper/%s", p.Label)
-	case disk.Fat32:
-		cmd.Cmd = fmt.Sprintf("mkfs.fat -F32 /dev/mapper/%s", p.Label)
-	default:
-		log.Panicf("unrecognized filesystem %s! Aborting... ", p.Format)
-	}
-
-	cmds = append(cmds, cmd)
+	cmds = append(cmds, MakeDiskFormattingCommand(p.Format, "/dev/mapper/"+p.Label, ""))
 
 	cmds = append(cmds, Sleep(2))
 
@@ -214,7 +216,6 @@ func MakeEncryptedFilesystemYubikeyCommand(p disk.Partition, encryptionPasswd st
 		Cmd:   fmt.Sprintf(`echo -ne "%s\n%d" > /root/boot/crypt-storage/default`, salt, ITERATIONS),
 	})
 
-	// TODO doesnt work
 	cmds = append(cmds, ShellCommand{
 		Label: "Unmounting /root/boot",
 		Cmd:   "umount /root/boot",
@@ -223,28 +224,8 @@ func MakeEncryptedFilesystemYubikeyCommand(p disk.Partition, encryptionPasswd st
 	return
 }
 
-func MakeFilesystemCommand(p disk.Partition) (cmds []Command) {
-	cmd := ShellCommand{
-		Label: fmt.Sprintf("Partition /dev/%s to %s", p.Path, p.Format),
-	}
-
-	switch p.Format {
-	case disk.Ext4:
-		cmd.Cmd = fmt.Sprintf("mkfs.ext4 -L %s /dev/%s", p.Label, p.Path)
-	case disk.Fat32:
-		cmd.Cmd = fmt.Sprintf("mkfs.fat -F32 -n %s /dev/%s", p.Label, p.Path)
-	default:
-		log.Panicf("unrecognized filesystem %s! Aborting... ", p.Format)
-	}
-
-	cmds = append(cmds, cmd)
-
-	return
-}
-
 func FormatDiskLegacy(sel selection.Selection) (s selection.Selection, cmds []Command) {
-
-	sel.Disk.Table = disk.Mbr
+	sel.Disk.PartitionTable = disk.Mbr
 
 	sel.Disk.Partitions = []disk.Partition{
 		{
@@ -265,7 +246,7 @@ func FormatDiskLegacy(sel selection.Selection) (s selection.Selection, cmds []Co
 }
 
 func FormatDiskEfi(sel selection.Selection) (s selection.Selection, cmds []Command) {
-	sel.Disk.Table = disk.Gpt
+	sel.Disk.PartitionTable = disk.Gpt
 
 	sel.Disk.Partitions = []disk.Partition{
 		{

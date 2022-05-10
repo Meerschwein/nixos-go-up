@@ -10,6 +10,10 @@ import (
 	"strings"
 )
 
+func EscapeQuotes(s string) string {
+	return strings.ReplaceAll(s, "\"", "\\\"")
+}
+
 func ExitIfErr(err error) {
 	if err != nil {
 		fmt.Println(err.Error())

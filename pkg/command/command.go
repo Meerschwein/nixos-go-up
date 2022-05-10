@@ -45,7 +45,7 @@ func RunCmds(cmds []Command) {
 }
 
 func ShellScript(cmds []Command) (script string) {
-	script += "#!/bin/bash\n\n"
+	script += "#!/usr/bin/env bash\n\n"
 
 	for _, c := range cmds {
 		script += fmt.Sprintf(
@@ -69,8 +69,10 @@ func (c ShellCommand) Message() string {
 }
 
 func (c ShellCommand) Execute(state map[string]string) (key string, val string, err error) {
+	fmt.Println(c.Cmd)
 	cmd := c.Cmd
 	for k, v := range state {
+		fmt.Printf("Replacing %s with %s", "$"+k, v)
 		cmd = strings.ReplaceAll(cmd, "$"+k, v)
 	}
 	out, err := exec.Command("bash", "-c", cmd).CombinedOutput()
@@ -207,7 +209,7 @@ func GenerateCustomNixosConfig(sel selection.Selection) (string, error) {
 		replacement.GrubDevice = "/dev/" + sel.Disk.Name
 	}
 
-	t := template.Must(template.New("nixosconfiguration").Parse(NixOSConfiguration()))
+	t := template.Must(template.New("NixOS configuration.nix").Parse(NixOSConfiguration()))
 
 	data := bytes.Buffer{}
 	err = t.Execute(&data, replacement)
@@ -234,7 +236,7 @@ func GenerateNixosConfig(sel selection.Selection) (s selection.Selection, cmds [
 	config, _ := GenerateCustomNixosConfig(sel)
 	cmds = append(cmds, ShellCommand{
 		Label: "Generate custom nixos configuration file",
-		Cmd:   fmt.Sprintf("echo '%s' > /mnt/etc/nixos/configuration.nix", config),
+		Cmd:   fmt.Sprintf(`echo "%s" > /mnt/etc/nixos/configuration.nix`, util.EscapeQuotes(config)),
 	})
 
 	if sel.Disk.Yubikey {
@@ -252,24 +254,24 @@ func GenerateNixosConfig(sel selection.Selection) (s selection.Selection, cmds [
 		cmds = append(cmds, ShellCommand{
 			Label: "Modifying hardware-configuration.nix",
 			Cmd: fmt.Sprintf(
-				`echo '
+				`echo "
 // {
-  boot.initrd.kernelModules = [ "vfat" "nls_cp437" "nls_iso8859-1" "usbhid" ];
+  boot.initrd.kernelModules = [ \"vfat\" \"nls_cp437\" \"nls_iso8859-1\" \"usbhid\" ];
   boot.initrd.luks.yubikeySupport = true;
   boot.initrd.luks.devices = {
-    "%s" = {
-      device = "/dev/%s";
+    \"%s\" = {
+      device = \"/dev/%s\";
       preLVM = true;
       yubikey = {
         slot = %d;
         twoFactor = %v;
         storage = {
-          device = "/dev/%s";
+          device = \"/dev/%s\";
         };
       };
     };
   };
-}' >> /mnt/etc/nixos/hardware-configuration.nix`,
+}" >> /mnt/etc/nixos/hardware-configuration.nix`,
 				storagePart.Label,
 				storagePart.Path,
 				SLOT,

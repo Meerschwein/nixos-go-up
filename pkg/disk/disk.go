@@ -10,22 +10,29 @@ import (
 	"github.com/Meerschwein/nixos-go-up/pkg/util"
 )
 
-type DiskFormat string
+type Filesystem string
 
 var (
-	Ext4  DiskFormat = "ext4"
-	Fat32 DiskFormat = "fat32"
+	Ext4  Filesystem = "ext4"
+	Fat32 Filesystem = "fat32"
 )
 
-type Table string
+type PartitionTable string
 
 var (
-	Gpt Table = "gpt"
-	Mbr Table = "mbr"
+	Gpt PartitionTable = "gpt"
+	Mbr PartitionTable = "mbr"
+)
+
+type Firmware string
+
+var (
+	UEFI Firmware = "uefi"
+	BIOS Firmware = "bios"
 )
 
 type Partition struct {
-	Format   DiskFormat
+	Format   Filesystem
 	Label    string
 	Primary  bool
 	Path     string
@@ -44,8 +51,8 @@ type Disk struct {
 	Yubikey          bool
 	EncryptionPasswd string
 
-	Table      Table
-	Partitions []Partition
+	PartitionTable PartitionTable
+	Partitions     []Partition
 }
 
 func (d Disk) WithSize() Disk {
@@ -106,17 +113,6 @@ func (d Disk) PartitionName(partition int) string {
 	case strings.HasPrefix(d.Name, "nvme"):
 		return d.Name + "p" + strconv.Itoa(partition)
 	default:
-		fmt.Printf("Warning unrecognised disk type: %s guessing %s\n",
-			d.Name,
-			d.Name+strconv.Itoa(partition),
-		)
 		return d.Name + strconv.Itoa(partition)
 	}
 }
-
-type Firmware string
-
-var (
-	UEFI Firmware = "uefi"
-	BIOS Firmware = "bios"
-)

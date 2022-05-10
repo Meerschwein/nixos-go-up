@@ -28,7 +28,7 @@ func DiskGen() *rapid.Generator {
 			Encrypt:          Bool(t, "Disk_Encrypt"),
 			Yubikey:          Bool(t, "Disk_Yubikey"),
 			EncryptionPasswd: String(t, "Disk_EncryptionPasswd"),
-			Table:            rapid.SampledFrom([]disk.Table{disk.Gpt, disk.Mbr}).Draw(t, "Disk_Table").(disk.Table),
+			PartitionTable:            rapid.SampledFrom([]disk.PartitionTable{disk.Gpt, disk.Mbr}).Draw(t, "Disk_Table").(disk.PartitionTable),
 			Partitions:       rapid.SliceOfN(PartitionGen(), 0, 5).Draw(t, "Disk_Partitions").([]disk.Partition),
 		}
 	})
@@ -37,7 +37,7 @@ func DiskGen() *rapid.Generator {
 func PartitionGen() *rapid.Generator {
 	return rapid.Custom(func(t *rapid.T) disk.Partition {
 		return disk.Partition{
-			Format:   rapid.SampledFrom([]disk.DiskFormat{disk.Ext4, disk.Fat32}).Draw(t, "Partition_Format").(disk.DiskFormat),
+			Format:   rapid.SampledFrom([]disk.Filesystem{disk.Ext4, disk.Fat32}).Draw(t, "Partition_Format").(disk.Filesystem),
 			Label:    String(t, "Partition_Label"),
 			Primary:  Bool(t, "Partition_Primary"),
 			Path:     String(t, "Partition_Path"),

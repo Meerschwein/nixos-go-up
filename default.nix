@@ -11,8 +11,9 @@ stdenv.mkDerivation {
     cryptsetup
     openssl
     parted
-    pbkdf2Sha512
     yubikey-personalization
+    
+    pbkdf2Sha512
     nixos-go-up
   ];
 

@@ -15,7 +15,7 @@ func TestDisk_TableCommands_Properties(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		d1 := generators.DiskGen().Draw(t, "Disk").(disk.Disk)
 		d2 := generators.DiskGen().Filter(func(d disk.Disk) bool {
-			return d.Table != d1.Table
+			return d.PartitionTable != d1.PartitionTable
 		}).Draw(t, "Disk").(disk.Disk)
 
 		cmds := command.TableCommands(d1)
@@ -33,8 +33,8 @@ func TestDisk_MakeFilesystemCommand_Properties(t *testing.T) {
 			return p.Format != part.Format
 		}).Draw(t, "Partition 2").(disk.Partition)
 
-		cmds := command.MakeFilesystemCommand(part)
-		cmds2 := command.MakeFilesystemCommand(part2)
+		cmds := command.MakeDiskFormattingCommand(part.Format, "/dev/"+part.Path, part.Label)
+		cmds2 := command.MakeDiskFormattingCommand(part2.Format, "/dev/"+part2.Path, part2.Label)
 
 		require.NotEmpty(t, cmds, "Didn't get any commands")
 		require.NotEqual(t, cmds, cmds2, "Different Formats got the same commands")

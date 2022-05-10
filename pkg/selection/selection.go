@@ -2,6 +2,7 @@ package selection
 
 import (
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -33,8 +34,36 @@ func NixConfiguration(dm DesktopEnviroment) (config string) {
 	case NONE:
 		config = ""
 	default:
-		panic("Unknown Desktop Enviroment: " + string(dm) + "!")
+		log.Panicf("Unknown Desktop Enviroment: %s!", string(dm))
 	}
+	return
+}
+
+func SecretDialog(label string) (secret string, err error) {
+	prompt := promptui.Prompt{
+		HideEntered: true,
+		Mask:        '*',
+	}
+
+	check := "*"
+	for secret != check {
+		prompt.Label = "Choose " + label
+		secret, err = prompt.Run()
+		if err != nil {
+			return
+		}
+
+		prompt.Label = "Repeat " + label
+		check, err = prompt.Run()
+		if err != nil {
+			return
+		}
+
+		if secret != check {
+			fmt.Println("Secrets don't match! Try again!")
+		}
+	}
+
 	return
 }
 
@@ -49,7 +78,40 @@ func ConfirmationDialog(label string) bool {
 	return err == nil
 }
 
-func SelectDisk(selection Selection) (Selection, error) {
+func YesNoDialog(label string) (success bool, err error) {
+	prompt := promptui.Select{
+		Label: label,
+		Items: []string{"Yes", "No"},
+		Size:  2,
+	}
+
+	i, _, err := prompt.Run()
+	if err != nil {
+		return
+	}
+
+	success = i == 0
+
+	return
+}
+
+func SelectionStepError(step string, err error) error {
+	return fmt.Errorf("an error occured during %s: %s", step, err)
+}
+
+type SelectionStep func(Selection) (Selection, error)
+
+type Selection struct {
+	Disk              disk.Disk
+	Hostname          string
+	Timezone          string
+	Username          string
+	Password          string
+	DesktopEnviroment DesktopEnviroment
+	KeyboardLayout    string
+}
+
+func SelectDisk(sel Selection) (Selection, error) {
 	disks := disk.GetDisks()
 
 	prompt := promptui.Select{
@@ -61,81 +123,44 @@ func SelectDisk(selection Selection) (Selection, error) {
 	i, _, err := prompt.Run()
 
 	if err != nil {
-		return Selection{}, fmt.Errorf("selecting disk failed: %s", err.Error())
+		return Selection{}, SelectionStepError("Select Disk", err)
 	}
 
-	selection.Disk = disks[i]
+	sel.Disk = disks[i]
 
-	return selection, nil
+	return sel, nil
 }
 
 func SelectDiskEncryption(sel Selection) (Selection, error) {
-	prompt := promptui.Select{
-		Label: "Do you want to encrypt that disk?",
-		Items: []string{"Yes", "No"},
-		Size:  2,
-	}
-
-	i, _, err := prompt.Run()
-
+	encrypt, err := YesNoDialog(fmt.Sprintf("Encrypt disk %s ?", sel.Disk.Name))
 	if err != nil {
-		return Selection{}, fmt.Errorf("selecting disk encryption failed: %s", err.Error())
+		return Selection{}, SelectionStepError("Encyrpt Disk", err)
 	}
-
-	if i == 1 { // No
+	if !encrypt {
+		sel.Disk.Encrypt = false
 		return sel, nil
 	}
 
 	sel.Disk.Encrypt = true
 
-	prompt2 := promptui.Prompt{
-		HideEntered: true,
-		Mask:        '*',
-	}
-
-	pwd1, pwd2 := "a", "b"
-	for pwd1 != pwd2 {
-		prompt2.Label = "Choose Password"
-		pwd1, err = prompt2.Run()
-		if err != nil {
-			return Selection{}, fmt.Errorf("deciding Encryption Password failed: %s", err.Error())
-		}
-
-		prompt2.Label = "Repeat Password"
-		pwd2, err = prompt2.Run()
-		if err != nil {
-			return Selection{}, fmt.Errorf("deciding Encryption Password failed: %s", err.Error())
-		}
-
-		if pwd1 != pwd2 {
-			fmt.Println("Passwords don't match! Try again!")
-		}
-	}
-
-	sel.Disk.EncryptionPasswd = pwd1
-
-	prompt = promptui.Select{
-		Label: "Do you want to use a Yubikey?",
-		Items: []string{"Yes", "No"},
-		Size:  2,
-	}
-
-	i, _, err = prompt.Run()
-
+	pass, err := SecretDialog("Encryption Password")
 	if err != nil {
-		return Selection{}, fmt.Errorf("selecting yubikey failed: %s", err.Error())
+		return Selection{}, SelectionStepError("Disk encrytion password", err)
 	}
 
-	if i == 1 { // No
-		return sel, nil
+	sel.Disk.EncryptionPasswd = pass
+
+	useYubikey, err := YesNoDialog("Do you want to use a Yubikey for Encryption?")
+	if err != nil {
+		return Selection{}, SelectionStepError("Use Yubikey", err)
 	}
 
-	sel.Disk.Yubikey = true
+	sel.Disk.Yubikey = useYubikey
 
 	return sel, nil
 }
 
-func SelectUsername(selection Selection) (Selection, error) {
+func SelectUsername(sel Selection) (Selection, error) {
 	validUser, _ := regexp.Compile("^[a-z_][a-z0-9_-]*[$]?$")
 
 	prompt := promptui.Prompt{
@@ -150,46 +175,26 @@ func SelectUsername(selection Selection) (Selection, error) {
 
 	username, err := prompt.Run()
 	if err != nil {
-		return Selection{}, fmt.Errorf("deciding username failed: %s", err.Error())
+		return Selection{}, SelectionStepError("Username", err)
 	}
 
-	selection.Username = username
+	sel.Username = username
 
-	return selection, nil
+	return sel, nil
 }
 
-func SelectPassword(selection Selection) (Selection, error) {
-	prompt := promptui.Prompt{
-		HideEntered: true,
-		Mask:        '*',
+func SelectPassword(sel Selection) (Selection, error) {
+	pass, err := SecretDialog("Password")
+	if err != nil {
+		return sel, SelectionStepError("User password", err)
 	}
 
-	var err error
-	pwd1, pwd2 := "a", "b"
-	for pwd1 != pwd2 {
-		prompt.Label = "Choose Password"
-		pwd1, err = prompt.Run()
-		if err != nil {
-			return Selection{}, fmt.Errorf("deciding Password failed: %s", err.Error())
-		}
+	sel.Password = pass
 
-		prompt.Label = "Repeat Password"
-		pwd2, err = prompt.Run()
-		if err != nil {
-			return Selection{}, fmt.Errorf("deciding Password failed: %s", err.Error())
-		}
-
-		if pwd1 != pwd2 {
-			fmt.Println("Passwords don't match! Try again!")
-		}
-	}
-
-	selection.Password = pwd1
-
-	return selection, nil
+	return sel, nil
 }
 
-func SelectHostname(selection Selection) (Selection, error) {
+func SelectHostname(sel Selection) (Selection, error) {
 	validHostname, _ := regexp.Compile(`^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$`)
 
 	prompt := promptui.Prompt{
@@ -204,57 +209,55 @@ func SelectHostname(selection Selection) (Selection, error) {
 
 	hostname, err := prompt.Run()
 	if err != nil {
-		return Selection{}, fmt.Errorf("deciding hostname failed: %s", err.Error())
+		return Selection{}, SelectionStepError("Hostname", err)
 	}
 
-	selection.Hostname = hostname
+	sel.Hostname = hostname
 
-	return selection, nil
+	return sel, nil
 }
 
-func SelectTimezone(selection Selection) (Selection, error) {
+func SelectTimezone(sel Selection) (Selection, error) {
 	prompt := promptui.Prompt{
 		Label:   "Timezone",
 		Default: "Europe/Berlin",
 		Validate: func(s string) error {
+			// These are allowed by time.LoadLocation but not in nix
 			if s == "" || s == "UTC" || s == "Local" {
 				return fmt.Errorf("not allowed")
 			}
 			_, err := time.LoadLocation(s)
-			if err != nil {
-				return err
-			}
-			return nil
+			return err
 		},
 	}
 
 	timezone, err := prompt.Run()
 	if err != nil {
-		return Selection{}, fmt.Errorf("deciding timezone failed: %s", err.Error())
+		return Selection{}, SelectionStepError("Timezone", err)
 	}
 
-	selection.Timezone = timezone
+	sel.Timezone = timezone
 
-	return selection, nil
+	return sel, nil
 }
 
-func SelectKeyboardLayout(selection Selection) (Selection, error) {
+func SelectKeyboardLayout(sel Selection) (Selection, error) {
 	prompt := promptui.Prompt{
 		Label:   "Keyboard Layout",
-		Default: "us",
+		Default: "de",
 	}
 
 	layout, err := prompt.Run()
 	if err != nil {
-		return Selection{}, fmt.Errorf("deciding Keyboard layout failed: %s", err.Error())
+		return Selection{}, SelectionStepError("Keyboard layout", err)
 	}
 
-	selection.KeyboardLayout = layout
+	sel.KeyboardLayout = layout
 
-	return selection, nil
+	return sel, nil
 }
 
-func SelectDesktopEnviroment(selection Selection) (Selection, error) {
+func SelectDesktopEnviroment(sel Selection) (Selection, error) {
 	dms := getDesktopEnviroments()
 
 	prompt := promptui.Select{
@@ -266,24 +269,12 @@ func SelectDesktopEnviroment(selection Selection) (Selection, error) {
 	i, _, err := prompt.Run()
 
 	if err != nil {
-		return Selection{}, fmt.Errorf("selecting disk failed: %s", err.Error())
+		return Selection{}, SelectionStepError("Desktop Enviroment", err)
 	}
 
-	selection.DesktopEnviroment = dms[i]
+	sel.DesktopEnviroment = dms[i]
 
-	return selection, nil
-}
-
-type SelectionStep func(Selection) (Selection, error)
-
-type Selection struct {
-	Disk              disk.Disk
-	Hostname          string
-	Timezone          string
-	Username          string
-	Password          string
-	DesktopEnviroment DesktopEnviroment
-	KeyboardLayout    string
+	return sel, nil
 }
 
 func (s Selection) String() (res string) {
