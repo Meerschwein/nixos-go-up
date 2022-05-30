@@ -35,7 +35,7 @@
         nixos-shell
       ];
     };
-    defaultApp.${system} = {
+    apps.${system}.default = {
       type = "app";
       program = "${pkgs.nixos-go-up}/bin/nixos-go-up";
     };
