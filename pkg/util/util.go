@@ -12,8 +12,15 @@ import (
 	"github.com/itsyouonline/identityserver/credentials/password/keyderivation/crypt/sha512crypt"
 )
 
-func EscapeQuotes(s string) string {
-	return strings.ReplaceAll(s, "\"", "\\\"")
+// https://www.gnu.org/software/bash/manual/html_node/Double-Quotes.html
+func EscapeBashDoubleQuotes(s string) string {
+	replacements := []string{"\\", "$", "`", "\""}
+
+	for _, rep := range replacements {
+		s = strings.ReplaceAll(s, rep, "\\"+rep)
+	}
+
+	return s
 }
 
 func ExitIfErr(err error) {
@@ -80,6 +87,6 @@ func WasRunAsRoot() bool {
 }
 
 func MkPasswd(key string) string {
-	hash, _ := sha512crypt.New().Generate([]byte(""), []byte{})
+	hash, _ := sha512crypt.New().Generate([]byte(key), []byte{})
 	return hash
 }

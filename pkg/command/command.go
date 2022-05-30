@@ -194,7 +194,8 @@ func GenerateCustomNixosConfig(sel selection.Selection) (string, error) {
 		Desktopmanager: selection.NixConfiguration(sel.DesktopEnviroment),
 		KeyboardLayout: sel.KeyboardLayout,
 		Username:       sel.Username,
-		PasswordHash:   util.MkPasswd(sel.Password),
+		//FIXME super dirty hack to stop bash escape things
+		PasswordHash: util.MkPasswd(sel.Password),
 	}
 
 	interfaces, err := util.GetInterfaces()
@@ -243,7 +244,7 @@ func GenerateNixosConfig(sel selection.Selection) (s selection.Selection, cmds [
 	config, _ := GenerateCustomNixosConfig(sel)
 	cmds = append(cmds, ShellCommand{
 		Label: "Generate custom nixos configuration file",
-		Cmd:   fmt.Sprintf(`echo "%s" > /mnt/etc/nixos/configuration.nix`, util.EscapeQuotes(config)),
+		Cmd:   fmt.Sprintf(`echo "%s" > /mnt/etc/nixos/configuration.nix`, util.EscapeBashDoubleQuotes(config)),
 	})
 
 	if sel.Disk.Yubikey {
