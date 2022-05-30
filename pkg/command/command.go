@@ -109,15 +109,24 @@ func MakeCommandGenerators(sel selection.Selection) (generators []CommandGenerat
 		generators = append(generators, FormatDiskLegacy)
 	}
 
-	generators = append(generators, SleepG(5))
+	// generators = append(generators, SleepG(10))
 
-	generators = append(generators, func(sel selection.Selection) (selection.Selection, []Command) {
-		cmds := []Command{ShellCommand{
-			Label: "Create /mnt",
-			Cmd:   "mkdir -p /mnt",
-		}}
-		return sel, cmds
-	})
+	generators = append(generators,
+		func(sel selection.Selection) (selection.Selection, []Command) {
+			cmds := []Command{ShellCommand{
+				Label: "Create /mnt",
+				Cmd:   "mkdir -p /mnt",
+			}}
+			return sel, cmds
+		},
+		// func(sel selection.Selection) (selection.Selection, []Command) {
+		// 	cmds := []Command{ShellCommand{
+		// 		Label: "Reload Daemons",
+		// 		Cmd:   "systemctl daemon-reload",
+		// 	}}
+		// 	return sel, cmds
+		// },
+	)
 	if sel.Disk.Encrypt {
 		generators = append(generators, MountEncryptedRootToMnt)
 	} else {
@@ -159,8 +168,8 @@ func MountEncryptedRootToMnt(sel selection.Selection) (s selection.Selection, cm
 
 func MountRootToMnt(sel selection.Selection) (s selection.Selection, cmds []Command) {
 	cmds = append(cmds, ShellCommand{
-		Label: fmt.Sprintf("Mounting /dev/disk/by-label/%s at /mnt", ROOTLABEL),
-		Cmd:   fmt.Sprintf("mount /dev/disk/by-label/%s /mnt", ROOTLABEL),
+		Label: fmt.Sprintf("Mounting %s at /mnt", ROOTLABEL),
+		Cmd:   fmt.Sprintf("mount -L %s /mnt", ROOTLABEL),
 	})
 
 	return sel, cmds
@@ -194,7 +203,6 @@ func GenerateCustomNixosConfig(sel selection.Selection) (string, error) {
 		Desktopmanager: selection.NixConfiguration(sel.DesktopEnviroment),
 		KeyboardLayout: sel.KeyboardLayout,
 		Username:       sel.Username,
-		//FIXME super dirty hack to stop bash escape things
 		PasswordHash: util.MkPasswd(sel.Password),
 	}
 
@@ -301,7 +309,7 @@ func UefiMountBootDir(sel selection.Selection) (s selection.Selection, cmds []Co
 
 	cmds = append(cmds, ShellCommand{
 		Label: fmt.Sprintf("Mounting %s to /mnt/boot", BOOTLABEL),
-		Cmd:   fmt.Sprintf("mount /dev/disk/by-label/%s /mnt/boot", BOOTLABEL),
+		Cmd:   fmt.Sprintf("mount -L %s /mnt/boot", BOOTLABEL),
 	})
 
 	return sel, cmds
