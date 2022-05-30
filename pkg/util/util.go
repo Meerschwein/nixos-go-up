@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"os/user"
 	"strings"
+
+	"github.com/itsyouonline/identityserver/credentials/password/keyderivation/crypt/sha512crypt"
 )
 
 func EscapeQuotes(s string) string {
@@ -75,4 +77,9 @@ func WasRunAsRoot() bool {
 		fmt.Printf("Unable to get current user: %s\n", err)
 	}
 	return currentUser.Username == "root"
+}
+
+func MkPasswd(key string) string {
+	hash, _ := sha512crypt.New().Generate([]byte(""), []byte{})
+	return hash
 }
