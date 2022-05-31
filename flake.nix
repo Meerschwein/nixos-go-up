@@ -21,6 +21,8 @@
   {
     devShell.${system} = pkgs.mkShell {
       packages = with pkgs; [
+        go_1_17
+
         # Go tools
         gopls
         gopkgs
@@ -30,7 +32,7 @@
         go-tools
         gomodifytags
         impl
-        go_1_17
+        golangci-lint
 
         # Formatting
         treefmt
