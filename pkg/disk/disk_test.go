@@ -14,7 +14,7 @@ import (
 
 func TestDisk_PartitionName_Properties(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		d := generators.DiskGen().Draw(t, "Disk").(disk.Disk)
+		d := generators.Disk().Draw(t, "Disk").(disk.Disk)
 		part := rapid.Int().Draw(t, "Partition number").(int)
 
 		res := d.PartitionName(part)

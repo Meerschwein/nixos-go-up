@@ -17,7 +17,6 @@ const (
 	ITERATIONS  = 1000000
 	CIPHER      = "aes-xts-plain64"
 	HASH        = "sha512"
-	SLOT        = 2
 )
 
 func PartitioningCommands(d disk.Disk, firmware configuration.Firmware) (cmds []Command) {
@@ -57,13 +56,13 @@ func PartitioningCommands(d disk.Disk, firmware configuration.Firmware) (cmds []
 	return
 }
 
-func FormattingCommands(disk disk.Disk) (cmds []Command) {
-	for _, p := range disk.Partitions {
-		if disk.Encrypt && !p.Bootable {
-			if disk.Yubikey {
-				cmds = append(cmds, FormatAndEncryptPartitionWithYubikey(p, disk.EncryptionPasswd)...)
+func FormattingCommands(conf configuration.Conf) (cmds []Command) {
+	for _, p := range conf.Disk.Partitions {
+		if conf.Disk.Encrypt && !p.Bootable {
+			if conf.Yubikey {
+				cmds = append(cmds, FormatAndEncryptPartitionWithYubikey(p, conf.Disk.EncryptionPasswd, conf.YubikeySlot)...)
 			} else {
-				cmds = append(cmds, FormatAndEncryptPartition(p, disk.EncryptionPasswd)...)
+				cmds = append(cmds, FormatAndEncryptPartition(p, conf.Disk.EncryptionPasswd)...)
 			}
 		} else {
 			cmds = append(cmds, FormatPartition(p))
@@ -94,7 +93,7 @@ func PartitioningTableCommand(d disk.Disk) (cmd Command) {
 func DiskCommands(conf configuration.Conf) (cmds []Command) {
 	cmds = append(cmds, PartitioningTableCommand(conf.Disk))
 	cmds = append(cmds, PartitioningCommands(conf.Disk, conf.Firmware)...)
-	cmds = append(cmds, FormattingCommands(conf.Disk)...)
+	cmds = append(cmds, FormattingCommands(conf)...)
 	return
 }
 
@@ -157,7 +156,7 @@ func FormatAndEncryptPartition(p disk.Partition, encryptionPasswd string) []Comm
 	}
 }
 
-func FormatAndEncryptPartitionWithYubikey(p disk.Partition, encryptionPasswd string) (cmds []Command) {
+func FormatAndEncryptPartitionWithYubikey(p disk.Partition, encryptionPasswd string, yubikeySlot int) (cmds []Command) {
 	salt_b := make([]byte, SALT_LENGTH)
 	rand.Read(salt_b)
 	salt := hex.EncodeToString(salt_b)
@@ -165,10 +164,9 @@ func FormatAndEncryptPartitionWithYubikey(p disk.Partition, encryptionPasswd str
 	challenge_b := sha512.Sum512([]byte(salt))
 	challenge := hex.EncodeToString(challenge_b[:])
 
-	// TODO Figure out slots
 	cmds = append(cmds, ShellCommand{
 		Label:    "Challenge the yubikey to a reponse",
-		Cmd:      fmt.Sprintf("ykchalresp -%d -x %s 2>/dev/null", SLOT, challenge),
+		Cmd:      fmt.Sprintf("ykchalresp -%d -x %s 2>/dev/null", yubikeySlot, challenge),
 		OutLabel: "YUBI_RESPONSE",
 	})
 
@@ -183,7 +181,6 @@ func FormatAndEncryptPartitionWithYubikey(p disk.Partition, encryptionPasswd str
 	}
 	cmds = append(cmds, cmd)
 
-	// TODO Sometimes crashes
 	cmds = append(cmds, ShellCommand{
 		Label: "Format Cryptsetup",
 		Cmd: fmt.Sprintf(
@@ -235,6 +232,7 @@ func BIOSDiskSetup(conf configuration.Conf) (configuration.Conf, []Command) {
 			Bootable: false,
 		},
 	}
+	conf.Disk.RootPartition = 0
 
 	return conf, []Command{}
 }
@@ -264,6 +262,8 @@ func UEFIDiskSetup(conf configuration.Conf) (configuration.Conf, []Command) {
 			Bootable: false,
 		},
 	}
+	conf.Disk.BootPartition = 0
+	conf.Disk.RootPartition = 1
 
 	return conf, []Command{}
 }

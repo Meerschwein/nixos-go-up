@@ -27,22 +27,23 @@ type Disk struct {
 	Name             string
 	SizeGB           int
 	Encrypt          bool
-	Yubikey          bool
 	EncryptionPasswd string
 
 	PartitionTable PartitionTable
 	Partitions     []Partition
+	RootPartition  int
+	BootPartition  int
 }
 
 type Partition struct {
-	Format   Filesystem
 	Label    string
-	Primary  bool
 	Path     string
+	Format   Filesystem
+	Primary  bool
+	Bootable bool
 	Number   int
 	From     string
 	To       string
-	Bootable bool
 }
 
 func (d Disk) WithSize() Disk {
@@ -105,4 +106,12 @@ func (d Disk) PartitionName(partition int) string {
 	default:
 		return d.Name + strconv.Itoa(partition)
 	}
+}
+
+func (d Disk) GetRootPartition() Partition {
+	return d.Partitions[d.RootPartition]
+}
+
+func (d Disk) GetBootPartition() Partition {
+	return d.Partitions[d.BootPartition]
 }

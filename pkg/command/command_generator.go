@@ -6,7 +6,6 @@ import (
 	"text/template"
 
 	"github.com/Meerschwein/nixos-go-up/pkg/configuration"
-	"github.com/Meerschwein/nixos-go-up/pkg/disk"
 	"github.com/Meerschwein/nixos-go-up/pkg/util"
 )
 
@@ -32,7 +31,7 @@ func MakeCommandGenerators(conf configuration.Conf) (gens []CommandGenerator) {
 	}
 
 	gens = append(gens,
-		GenerateNixosConfig,
+		WriteNixosConfig,
 		CmdsToGen(ShellCommand{
 			Label: "Running nixos-install",
 			Cmd:   "nixos-install --no-root-passwd",
@@ -58,7 +57,6 @@ func GenerateCommands(conf configuration.Conf, generators []CommandGenerator) (c
 	loopConf := conf
 	for _, gen := range generators {
 		conf, c := gen(loopConf)
-		fmt.Println(conf)
 		loopConf = conf
 		cmds = append(cmds, c...)
 	}
@@ -98,7 +96,7 @@ func GenerateCustomNixosConfig(conf configuration.Conf) string {
 	return data.String()
 }
 
-func GenerateNixosConfig(conf configuration.Conf) (s configuration.Conf, cmds []Command) {
+func WriteNixosConfig(conf configuration.Conf) (_ configuration.Conf, cmds []Command) {
 	cmds = append(cmds, ShellCommand{
 		Label: "Generate default nixos configuration at /mnt",
 		Cmd:   "nixos-generate-config --root /mnt",
@@ -107,19 +105,7 @@ func GenerateNixosConfig(conf configuration.Conf) (s configuration.Conf, cmds []
 	config := GenerateCustomNixosConfig(conf)
 	cmds = append(cmds, WriteToFile("Generate custom nixos configuration file", config, "/mnt/etc/nixos/configuration.nix"))
 
-	if conf.Disk.Yubikey {
-		// TODO
-		// This is super hacky
-		bootPart := disk.Partition{}
-		storagePart := disk.Partition{}
-		for _, p := range conf.Disk.Partitions {
-			if p.Bootable {
-				bootPart = p
-			} else {
-				storagePart = p
-			}
-		}
-
+	if conf.Yubikey {
 		cmds = append(cmds, AppendToFile(
 			"Modifying hardware-configuration.nix",
 			fmt.Sprintf(
@@ -141,15 +127,14 @@ func GenerateNixosConfig(conf configuration.Conf) (s configuration.Conf, cmds []
     };
   };
 }`,
-				storagePart.Label,
-				storagePart.Path,
-				SLOT,
+				conf.Disk.GetRootPartition().Label,
+				conf.Disk.GetRootPartition().Path,
+				conf.YubikeySlot,
 				conf.Disk.EncryptionPasswd != "",
-				bootPart.Path,
+				conf.Disk.GetBootPartition().Path,
 			),
 			"/mnt/etc/nixos/hardware-configuration.nix",
 		))
-
 	}
 
 	return conf, cmds

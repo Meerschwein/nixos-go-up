@@ -18,21 +18,25 @@ func Bool(t *rapid.T, label string) bool {
 	return rapid.Bool().Draw(t, label).(bool)
 }
 
-func DiskGen() *rapid.Generator {
+func Disk() *rapid.Generator {
 	return rapid.Custom(func(t *rapid.T) disk.Disk {
-		return disk.Disk{
+		d := disk.Disk{
 			Name:             String(t, "Disk_Name"),
 			SizeGB:           Int(t, "Disk_SizeGB"),
 			Encrypt:          Bool(t, "Disk_Encrypt"),
-			Yubikey:          Bool(t, "Disk_Yubikey"),
 			EncryptionPasswd: String(t, "Disk_EncryptionPasswd"),
 			PartitionTable:   rapid.SampledFrom([]disk.PartitionTable{disk.Gpt, disk.Mbr}).Draw(t, "Disk_Table").(disk.PartitionTable),
-			Partitions:       rapid.SliceOfN(PartitionGen(), 0, 5).Draw(t, "Disk_Partitions").([]disk.Partition),
+			Partitions:       rapid.SliceOfN(Partition(), 0, 5).Draw(t, "Disk_Partitions").([]disk.Partition),
 		}
+
+		d.BootPartition = rapid.IntMax(len(d.Partitions)).Draw(t, "Disk_BootPartittion").(int)
+		d.RootPartition = rapid.IntMax(len(d.Partitions)).Draw(t, "Disk_RootPartittion").(int)
+
+		return d
 	})
 }
 
-func PartitionGen() *rapid.Generator {
+func Partition() *rapid.Generator {
 	return rapid.Custom(func(t *rapid.T) disk.Partition {
 		return disk.Partition{
 			Format:   rapid.SampledFrom([]disk.Filesystem{disk.Ext4, disk.Fat32}).Draw(t, "Partition_Format").(disk.Filesystem),
@@ -47,10 +51,10 @@ func PartitionGen() *rapid.Generator {
 	})
 }
 
-func ConfigurationGen() *rapid.Generator {
+func Configuration() *rapid.Generator {
 	return rapid.Custom(func(t *rapid.T) configuration.Conf {
 		return configuration.Conf{
-			Disk:     DiskGen().Draw(t, "Disk").(disk.Disk),
+			Disk:     Disk().Draw(t, "Disk").(disk.Disk),
 			Hostname: String(t, "Hostname"),
 			Timezone: String(t, "Timezone"),
 			Username: String(t, "Username"),
@@ -61,11 +65,15 @@ func ConfigurationGen() *rapid.Generator {
 				configuration.NONE,
 			}).Draw(t, "DesktopEnviroment").(configuration.DesktopEnviroment),
 			KeyboardLayout: String(t, "KeyboardLayout"),
+			Firmware:       Firmware().Draw(t, "Firmware").(configuration.Firmware),
+			NetInterfaces:  rapid.SliceOf(rapid.String()).Draw(t, "NetInterfaces").([]string),
+			Yubikey:        Bool(t, "Yubikey"),
+			YubikeySlot:    Int(t, "YubikeySlot"),
 		}
 	})
 }
 
-func FirmwareGen() *rapid.Generator {
+func Firmware() *rapid.Generator {
 	return rapid.Custom(func(t *rapid.T) configuration.Firmware {
 		return rapid.SampledFrom([]configuration.Firmware{configuration.UEFI, configuration.BIOS}).Draw(t, "Firmware").(configuration.Firmware)
 	})

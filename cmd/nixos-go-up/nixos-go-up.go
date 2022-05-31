@@ -39,21 +39,21 @@ func main() {
 	conf.NetInterfaces = util.GetInterfaces()
 
 	selectionSteps := []selection.SelectionStep{
-		selection.SelectDisk,
+		selection.Disk,
 	}
 
 	// BIOS encryption is not supported at the moment
 	if conf.IsUEFI() {
-		selectionSteps = append(selectionSteps, selection.SelectDiskEncryption)
+		selectionSteps = append(selectionSteps, selection.DiskEncryption)
 	}
 
 	selectionSteps = append(selectionSteps,
-		selection.SelectHostname,
-		selection.SelectTimezone,
-		selection.SelectDesktopEnviroment,
-		selection.SelectKeyboardLayout,
-		selection.SelectUsername,
-		selection.SelectPassword,
+		selection.Hostname,
+		selection.Timezone,
+		selection.DesktopEnviroment,
+		selection.Keyboardlayout,
+		selection.Username,
+		selection.Password,
 	)
 
 	conf, err := selection.GetSelections(conf, selectionSteps)

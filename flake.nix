@@ -13,7 +13,7 @@
     pkgs = import inputs.nixpkgs-stable {
       inherit system;
       overlays = [
-        (_: prev: {nixos-go-up = prev.callPackage ./assets/nixos-go-up.nix {};})
+        (_: prev: {nixos-go-up = prev.callPackage ./nix/nixos-go-up.nix {};})
         (_: _: {nixos-shell = inputs.nixos-shell.defaultPackage.${system};})
       ];
     };
@@ -50,7 +50,7 @@
       inherit system pkgs lib;
       modules = [
         inputs.nixos-shell.nixosModules.nixos-shell
-        ./vm.nix
+        ./nix/vm.nix
       ];
     };
   };

@@ -12,8 +12,8 @@ import (
 
 func TestDisk_TableCommands_Properties(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		d1 := generators.DiskGen().Draw(t, "Disk").(disk.Disk)
-		d2 := generators.DiskGen().Filter(func(d disk.Disk) bool {
+		d1 := generators.Disk().Draw(t, "Disk").(disk.Disk)
+		d2 := generators.Disk().Filter(func(d disk.Disk) bool {
 			return d.PartitionTable != d1.PartitionTable
 		}).Draw(t, "Disk").(disk.Disk)
 
@@ -27,8 +27,8 @@ func TestDisk_TableCommands_Properties(t *testing.T) {
 
 func TestDisk_MakeFilesystemCommand_Properties(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		part := generators.PartitionGen().Draw(t, "Partition").(disk.Partition)
-		part2 := generators.PartitionGen().Filter(func(p disk.Partition) bool {
+		part := generators.Partition().Draw(t, "Partition").(disk.Partition)
+		part2 := generators.Partition().Filter(func(p disk.Partition) bool {
 			return p.Format != part.Format
 		}).Draw(t, "Partition 2").(disk.Partition)
 

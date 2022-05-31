@@ -12,7 +12,7 @@ import (
 
 type SelectionStep func(before configuration.Conf) (after configuration.Conf, err error)
 
-func SelectDisk(conf configuration.Conf) (configuration.Conf, error) {
+func Disk(conf configuration.Conf) (configuration.Conf, error) {
 	disks := disk.GetDisks()
 
 	prompt := promptui.Select{
@@ -31,19 +31,33 @@ func SelectDisk(conf configuration.Conf) (configuration.Conf, error) {
 	return conf, nil
 }
 
-func SelectDiskEncryption(conf configuration.Conf) (configuration.Conf, error) {
+func DiskEncryption(conf configuration.Conf) (configuration.Conf, error) {
 	conf.Disk.Encrypt = YesNoDialog(fmt.Sprintf("Encrypt disk %s?", conf.Disk.Name))
 	if !conf.Disk.Encrypt {
 		return conf, nil
 	}
 
 	conf.Disk.EncryptionPasswd = SecretDialog("Encryption Password")
-	conf.Disk.Yubikey = YesNoDialog("Do you want to use a Yubikey for Encryption?")
+	conf.Yubikey = YesNoDialog("Do you want to use a Yubikey for Encryption?")
+	if conf.Yubikey {
+		fmt.Println("Warning! You must have the Yubikey plugged and a slot configured for challenge response!")
+		prompt := promptui.Select{
+			Label:     "Select disk to install NixOS to",
+			Items:     []string{"1", "2"},
+			Size:      2,
+			CursorPos: 1,
+		}
+		i, _, err := prompt.Run()
+		if err != nil {
+			return configuration.Conf{}, SelectionStepError("Select Yubikey Slot", err)
+		}
+		conf.YubikeySlot = i + 1
+	}
 
 	return conf, nil
 }
 
-func SelectUsername(conf configuration.Conf) (configuration.Conf, error) {
+func Username(conf configuration.Conf) (configuration.Conf, error) {
 	validUser, _ := regexp.Compile("^[a-z_][a-z0-9_-]*[$]?$")
 
 	prompt := promptui.Prompt{
@@ -66,7 +80,7 @@ func SelectUsername(conf configuration.Conf) (configuration.Conf, error) {
 	return conf, nil
 }
 
-func SelectPassword(conf configuration.Conf) (configuration.Conf, error) {
+func Password(conf configuration.Conf) (configuration.Conf, error) {
 	pass := SecretDialog("Password")
 
 	conf.Password = pass
@@ -74,7 +88,8 @@ func SelectPassword(conf configuration.Conf) (configuration.Conf, error) {
 	return conf, nil
 }
 
-func SelectHostname(conf configuration.Conf) (configuration.Conf, error) {
+func Hostname(conf configuration.Conf) (configuration.Conf, error) {
+	// https://wiert.me/2017/08/29/regex-regular-expression-to-match-dns-hostname-or-ip-address-stack-overflow/
 	validHostname, _ := regexp.Compile(`^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$`)
 
 	prompt := promptui.Prompt{
@@ -97,7 +112,7 @@ func SelectHostname(conf configuration.Conf) (configuration.Conf, error) {
 	return conf, nil
 }
 
-func SelectTimezone(conf configuration.Conf) (configuration.Conf, error) {
+func Timezone(conf configuration.Conf) (configuration.Conf, error) {
 	prompt := promptui.Prompt{
 		Label:   "Timezone",
 		Default: "Europe/Berlin",
@@ -121,7 +136,7 @@ func SelectTimezone(conf configuration.Conf) (configuration.Conf, error) {
 	return conf, nil
 }
 
-func SelectKeyboardLayout(conf configuration.Conf) (configuration.Conf, error) {
+func Keyboardlayout(conf configuration.Conf) (configuration.Conf, error) {
 	prompt := promptui.Prompt{
 		Label:   "Keyboard Layout",
 		Default: "de",
@@ -137,7 +152,7 @@ func SelectKeyboardLayout(conf configuration.Conf) (configuration.Conf, error) {
 	return conf, nil
 }
 
-func SelectDesktopEnviroment(conf configuration.Conf) (configuration.Conf, error) {
+func DesktopEnviroment(conf configuration.Conf) (configuration.Conf, error) {
 	dms := configuration.DesktopEnviroments()
 
 	prompt := promptui.Select{

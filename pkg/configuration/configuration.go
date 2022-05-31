@@ -19,11 +19,13 @@ type Conf struct {
 
 	Firmware      Firmware
 	NetInterfaces []string
+	Yubikey       bool
+	YubikeySlot   int
 }
 
 func (c Conf) String() (res string) {
 	encrypt := strconv.FormatBool(c.Disk.Encrypt)
-	if c.Disk.Yubikey {
+	if c.Yubikey {
 		encrypt += " with Yubikey"
 	}
 
