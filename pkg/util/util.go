@@ -26,6 +26,10 @@ func EscapeBashDoubleQuotes(s string) string {
 func ExitIfErr(err error) {
 	if err != nil {
 		fmt.Println(err.Error())
+		if strings.HasSuffix(err.Error(), "^C") {
+			fmt.Println("User Interruption")
+			os.Exit(0)
+		}
 		os.Exit(1)
 	}
 }
@@ -54,12 +58,9 @@ func DoesDirExist(path string) bool {
 	return info.IsDir()
 }
 
-func GetInterfaces() ([]string, error) {
+func GetInterfaces() []string {
 	interfaces, err := net.Interfaces()
-	if err != nil {
-		return nil, err
-	}
-
+	ExitIfErr(err)
 	res := []string{}
 	for _, inter := range interfaces {
 		if !strings.Contains(inter.Flags.String(), "loopback") &&
@@ -67,7 +68,7 @@ func GetInterfaces() ([]string, error) {
 			res = append(res, inter.Name)
 		}
 	}
-	return res, nil
+	return res
 }
 
 func IsUefiSystem() bool {

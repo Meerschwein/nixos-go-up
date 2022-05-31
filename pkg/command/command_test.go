@@ -17,8 +17,8 @@ func TestDisk_TableCommands_Properties(t *testing.T) {
 			return d.PartitionTable != d1.PartitionTable
 		}).Draw(t, "Disk").(disk.Disk)
 
-		cmds := command.TableCommands(d1)
-		cmds2 := command.TableCommands(d2)
+		cmds := command.PartitioningTableCommand(d1)
+		cmds2 := command.PartitioningTableCommand(d2)
 
 		require.NotEmpty(t, cmds, "Didn't get any commands")
 		require.NotEqual(t, cmds, cmds2, "Different Tables got the same commands")
@@ -32,21 +32,10 @@ func TestDisk_MakeFilesystemCommand_Properties(t *testing.T) {
 			return p.Format != part.Format
 		}).Draw(t, "Partition 2").(disk.Partition)
 
-		cmds := command.MakeDiskFormattingCommand(part.Format, "/dev/"+part.Path, part.Label)
-		cmds2 := command.MakeDiskFormattingCommand(part2.Format, "/dev/"+part2.Path, part2.Label)
+		cmds := command.FormatPartition(part)
+		cmds2 := command.FormatPartition(part2)
 
 		require.NotEmpty(t, cmds, "Didn't get any commands")
 		require.NotEqual(t, cmds, cmds2, "Different Formats got the same commands")
-	})
-}
-
-func TestDisk_Commands_Properties(t *testing.T) {
-	rapid.Check(t, func(t *rapid.T) {
-		d := generators.DiskGen().Draw(t, "Disk").(disk.Disk)
-		bf1 := generators.FirmwareGen().Draw(t, "Firmware").(disk.Firmware)
-
-		cmds := command.Commands(d, bf1)
-
-		require.NotEmpty(t, cmds, "Didn't get any commands")
 	})
 }

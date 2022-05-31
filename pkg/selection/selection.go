@@ -32,7 +32,7 @@ func SelectDisk(conf configuration.Conf) (configuration.Conf, error) {
 }
 
 func SelectDiskEncryption(conf configuration.Conf) (configuration.Conf, error) {
-	conf.Disk.Encrypt = YesNoDialog(fmt.Sprintf("Encrypt disk %s ?", conf.Disk.Name))
+	conf.Disk.Encrypt = YesNoDialog(fmt.Sprintf("Encrypt disk %s?", conf.Disk.Name))
 	if !conf.Disk.Encrypt {
 		return conf, nil
 	}
@@ -156,7 +156,8 @@ func SelectDesktopEnviroment(conf configuration.Conf) (configuration.Conf, error
 	return conf, nil
 }
 
-func GetSelections(steps []SelectionStep) (conf configuration.Conf, err error) {
+func GetSelections(c configuration.Conf, steps []SelectionStep) (conf configuration.Conf, err error) {
+	conf = c
 	for _, step := range steps {
 		conf, err = step(conf)
 		if err != nil {

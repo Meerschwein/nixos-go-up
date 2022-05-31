@@ -16,6 +16,9 @@ type Conf struct {
 	Password          string
 	DesktopEnviroment DesktopEnviroment
 	KeyboardLayout    string
+
+	Firmware      Firmware
+	NetInterfaces []string
 }
 
 func (c Conf) String() (res string) {

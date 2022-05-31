@@ -13,25 +13,27 @@ import (
 type CommandGenerator func(configuration.Conf) (configuration.Conf, []Command)
 
 func MakeCommandGenerators(conf configuration.Conf) (gens []CommandGenerator) {
-	if util.IsUefiSystem() {
-		gens = append(gens, FormatDiskEfi)
+	if conf.IsUEFI() {
+		gens = append(gens, UEFIDiskSetup)
 	} else {
-		gens = append(gens, FormatDiskLegacy)
+		gens = append(gens, BIOSDiskSetup)
 	}
+
+	gens = append(gens, Stable(DiskCommands))
 
 	if conf.Disk.Encrypt {
-		gens = append(gens, Stable(MountDir("/dev/mapper/"+ROOTLABEL, "/mnt")...))
+		gens = append(gens, CmdsToGen(MountDir("/dev/mapper/"+ROOTLABEL, "/mnt")...))
 	} else {
-		gens = append(gens, Stable(MountByLabel(ROOTLABEL, "/mnt")...))
+		gens = append(gens, CmdsToGen(MountByLabel(ROOTLABEL, "/mnt")...))
 	}
 
-	if util.IsUefiSystem() {
-		gens = append(gens, Stable(MountByLabel(BOOTLABEL, "/mnt/boot")...))
+	if conf.IsUEFI() {
+		gens = append(gens, CmdsToGen(MountByLabel(BOOTLABEL, "/mnt/boot")...))
 	}
 
 	gens = append(gens,
 		GenerateNixosConfig,
-		Stable(ShellCommand{
+		CmdsToGen(ShellCommand{
 			Label: "Running nixos-install",
 			Cmd:   "nixos-install --no-root-passwd",
 		}),
@@ -40,17 +42,24 @@ func MakeCommandGenerators(conf configuration.Conf) (gens []CommandGenerator) {
 	return
 }
 
-func Stable(cmd ...Command) CommandGenerator {
+func CmdsToGen(cmds ...Command) CommandGenerator {
 	return func(conf configuration.Conf) (configuration.Conf, []Command) {
-		return conf, cmd
+		return conf, cmds
+	}
+}
+
+func Stable(f func(configuration.Conf) []Command) CommandGenerator {
+	return func(conf configuration.Conf) (configuration.Conf, []Command) {
+		return conf, f(conf)
 	}
 }
 
 func GenerateCommands(conf configuration.Conf, generators []CommandGenerator) (cmds []Command) {
-	loopSel := conf
+	loopConf := conf
 	for _, gen := range generators {
-		sel, c := gen(loopSel)
-		loopSel = sel
+		conf, c := gen(loopConf)
+		fmt.Println(conf)
+		loopConf = conf
 		cmds = append(cmds, c...)
 	}
 	return
@@ -66,16 +75,13 @@ func GenerateCustomNixosConfig(conf configuration.Conf) string {
 		PasswordHash:   util.MkPasswd(conf.Password),
 	}
 
-	interfaces, err := util.GetInterfaces()
-	util.ExitIfErr(err)
-
 	inters := ""
-	for _, inter := range interfaces {
+	for _, inter := range conf.NetInterfaces {
 		inters += "networking.interfaces." + inter + ".useDHCP = true;\n  "
 	}
 	replacement.NetworkingInterfaces = inters
 
-	if util.IsUefiSystem() {
+	if conf.IsUEFI() {
 		replacement.Bootloader = "boot.loader.systemd-boot.enable = true;"
 		replacement.GrubDevice = "nodev"
 	} else {
@@ -86,7 +92,7 @@ func GenerateCustomNixosConfig(conf configuration.Conf) string {
 	t := template.Must(template.New("NixOS configuration.nix").Parse(NixOSConfiguration()))
 	var data bytes.Buffer
 
-	err = t.Execute(&data, replacement)
+	err := t.Execute(&data, replacement)
 	util.ExitIfErr(err)
 
 	return data.String()
@@ -123,13 +129,13 @@ func GenerateNixosConfig(conf configuration.Conf) (s configuration.Conf, cmds []
   boot.initrd.luks.yubikeySupport = true;
   boot.initrd.luks.devices = {
     "%s" = {
-      device = "/dev/%s";
+      device = "%s";
       preLVM = true;
       yubikey = {
         slot = %d;
         twoFactor = %v;
         storage = {
-          device = "/dev/%s";
+          device = "%s";
         };
       };
     };

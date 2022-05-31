@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/Meerschwein/nixos-go-up/pkg/command"
+	"github.com/Meerschwein/nixos-go-up/pkg/configuration"
 	"github.com/Meerschwein/nixos-go-up/pkg/selection"
 	"github.com/Meerschwein/nixos-go-up/pkg/util"
 )
@@ -20,9 +21,7 @@ func init() {
 	flag.BoolVar(&dryRun, "dry-run", false, "dry-run")
 	flag.BoolVar(&toScript, "to-script", false, "to-script")
 	flag.StringVar(&scriptname, "script-name", "nixos-install.sh", "script name")
-}
 
-func main() {
 	flag.Parse()
 
 	if !util.WasRunAsRoot() {
@@ -32,13 +31,19 @@ func main() {
 	if util.MountIsUsed() && !dryRun {
 		util.ExitIfErr(fmt.Errorf("something is was found at /mnt"))
 	}
+}
+
+func main() {
+	conf := configuration.Conf{}
+	conf = conf.SetFirmware()
+	conf.NetInterfaces = util.GetInterfaces()
 
 	selectionSteps := []selection.SelectionStep{
 		selection.SelectDisk,
 	}
 
 	// BIOS encryption is not supported at the moment
-	if util.IsUefiSystem() {
+	if conf.IsUEFI() {
 		selectionSteps = append(selectionSteps, selection.SelectDiskEncryption)
 	}
 
@@ -51,10 +56,10 @@ func main() {
 		selection.SelectPassword,
 	)
 
-	sel, err := selection.GetSelections(selectionSteps)
+	conf, err := selection.GetSelections(conf, selectionSteps)
 	util.ExitIfErr(err)
 
-	fmt.Printf("Your Selection so far:\n%v\n", sel)
+	fmt.Printf("Your Selection so far:\n%v\n", conf)
 
 	cont := selection.ConfirmationDialog("Are you sure you want to continue?")
 	if !cont {
@@ -62,9 +67,9 @@ func main() {
 		return
 	}
 
-	gens := command.MakeCommandGenerators(sel)
+	gens := command.MakeCommandGenerators(conf)
 
-	cmds := command.GenerateCommands(sel, gens)
+	cmds := command.GenerateCommands(conf, gens)
 
 	if dryRun {
 		command.DryRun(cmds)

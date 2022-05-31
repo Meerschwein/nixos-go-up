@@ -23,13 +23,6 @@ var (
 	Mbr PartitionTable = "mbr"
 )
 
-type Firmware string
-
-var (
-	UEFI Firmware = "uefi"
-	BIOS Firmware = "bios"
-)
-
 type Disk struct {
 	Name             string
 	SizeGB           int

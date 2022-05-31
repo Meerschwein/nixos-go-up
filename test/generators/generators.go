@@ -66,7 +66,7 @@ func ConfigurationGen() *rapid.Generator {
 }
 
 func FirmwareGen() *rapid.Generator {
-	return rapid.Custom(func(t *rapid.T) disk.Firmware {
-		return rapid.SampledFrom([]disk.Firmware{disk.UEFI, disk.BIOS}).Draw(t, "Firmware").(disk.Firmware)
+	return rapid.Custom(func(t *rapid.T) configuration.Firmware {
+		return rapid.SampledFrom([]configuration.Firmware{configuration.UEFI, configuration.BIOS}).Draw(t, "Firmware").(configuration.Firmware)
 	})
 }

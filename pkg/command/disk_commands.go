@@ -5,10 +5,10 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
-	"log"
 
 	"github.com/Meerschwein/nixos-go-up/pkg/configuration"
 	"github.com/Meerschwein/nixos-go-up/pkg/disk"
+	"github.com/Meerschwein/nixos-go-up/pkg/util"
 )
 
 const (
@@ -20,16 +20,14 @@ const (
 	SLOT        = 2
 )
 
-func Commands(d disk.Disk, boot disk.Firmware) (cmds []Command) {
-	cmds = append(cmds, TableCommands(d)...)
-
+func PartitioningCommands(d disk.Disk, firmware configuration.Firmware) (cmds []Command) {
 	for _, p := range d.Partitions {
 		partType := "extended"
 		if p.Primary {
 			partType = "primary"
 		}
 
-		if p.Bootable && boot == disk.UEFI {
+		if p.Bootable && firmware == configuration.UEFI {
 			partType = "ESP"
 		}
 
@@ -56,93 +54,115 @@ func Commands(d disk.Disk, boot disk.Firmware) (cmds []Command) {
 			})
 		}
 	}
-
-	for _, p := range d.Partitions {
-		if d.Encrypt && !p.Bootable {
-			if d.Yubikey {
-				cmds = append(cmds, MakeEncryptedFilesystemYubikeyCommand(p, d.EncryptionPasswd)...)
-			} else {
-				cmds = append(cmds, MakeEncryptedFilesystemCommand(p, d.EncryptionPasswd)...)
-			}
-		} else {
-			cmds = append(cmds, MakeDiskFormattingCommand(p.Format, "/dev/"+p.Path, p.Label))
-		}
-	}
-
 	return
 }
 
-func TableCommands(d disk.Disk) (cmds []Command) {
-	var cmd ShellCommand
+func FormattingCommands(disk disk.Disk) (cmds []Command) {
+	for _, p := range disk.Partitions {
+		if disk.Encrypt && !p.Bootable {
+			if disk.Yubikey {
+				cmds = append(cmds, FormatAndEncryptPartitionWithYubikey(p, disk.EncryptionPasswd)...)
+			} else {
+				cmds = append(cmds, FormatAndEncryptPartition(p, disk.EncryptionPasswd)...)
+			}
+		} else {
+			cmds = append(cmds, FormatPartition(p))
+		}
+	}
+	return
+}
+
+func PartitioningTableCommand(d disk.Disk) (cmd Command) {
 	switch d.PartitionTable {
 	case disk.Mbr:
 		cmd = ShellCommand{
 			Label: fmt.Sprintf("Formatting %s to MBR", d.Name),
-			Cmd:   "parted -s /dev/" + d.Name + " -- mklabel msdos",
+			Cmd:   fmt.Sprintf("parted -s /dev/%s -- mklabel msdos", d.Name),
 		}
 	case disk.Gpt:
 		cmd = ShellCommand{
 			Label: fmt.Sprintf("Formatting %s to GPT", d.Name),
-			Cmd:   "parted -s /dev/" + d.Name + " -- mklabel gpt",
+			Cmd:   fmt.Sprintf("parted -s /dev/%s -- mklabel gpt", d.Name),
 		}
 	default:
-		log.Panicf("unrecognized partitioning scheme %s! Aborting... ", d.PartitionTable)
+		util.ExitIfErr(fmt.Errorf("unrecognized partitioning scheme %s! Aborting... ", d.PartitionTable))
 	}
-	cmds = append(cmds, cmd)
 
 	return
 }
 
-func MakeDiskFormattingCommand(format disk.Filesystem, path string, label string) Command {
-	labelArgs := ""
-	switch format {
+func DiskCommands(conf configuration.Conf) (cmds []Command) {
+	cmds = append(cmds, PartitioningTableCommand(conf.Disk))
+	cmds = append(cmds, PartitioningCommands(conf.Disk, conf.Firmware)...)
+	cmds = append(cmds, FormattingCommands(conf.Disk)...)
+	return
+}
+
+func FormatPartition(p disk.Partition) Command {
+	var labelArgs string
+	switch p.Format {
 	case disk.Ext4:
-		labelArgs = "-L " + label
+		labelArgs = "-L " + p.Label
 	case disk.Fat32:
-		labelArgs = "-n " + label
+		labelArgs = "-n " + p.Label
 	default:
-		log.Panicf("unrecognized filesystem %s! Aborting... ", format)
+		util.ExitIfErr(fmt.Errorf("unrecognized filesystem %s! Aborting... ", p.Format))
 	}
-	if label == "" {
+	if p.Label == "" {
 		labelArgs = ""
 	}
 
 	cmd := ShellCommand{
-		Label: fmt.Sprintf("Formatting %s to %s", path, format),
+		Label: fmt.Sprintf("Formatting %s to %s", p.Path, p.Format),
 	}
-	switch format {
+	switch p.Format {
 	case disk.Ext4:
-		cmd.Cmd = fmt.Sprintf("mkfs.ext4 %s %s", labelArgs, path)
+		cmd.Cmd = fmt.Sprintf("mkfs.ext4 %s %s", labelArgs, p.Path)
 	case disk.Fat32:
-		cmd.Cmd = fmt.Sprintf("mkfs.fat -F32 %s %s", labelArgs, path)
+		cmd.Cmd = fmt.Sprintf("mkfs.fat -F32 %s %s", labelArgs, p.Path)
 	default:
-		log.Panicf("unrecognized filesystem %s! Aborting... ", format)
+		util.ExitIfErr(fmt.Errorf("unrecognized filesystem %s! Aborting... ", p.Format))
 	}
 
 	return cmd
 }
 
-func MakeEncryptedFilesystemCommand(p disk.Partition, encryptionPasswd string) (cmds []Command) {
-	cmds = append(cmds, ShellCommand{
-		Label: fmt.Sprintf("Encrypt %s", p.Path),
-		Cmd:   fmt.Sprintf("echo -n '%s' | cryptsetup luksFormat /dev/%s --key-file /dev/stdin -M luks2 --pbkdf argon2id -i 5000", encryptionPasswd, p.Path),
-	}, ShellCommand{
-		Label: "Open LUKS partition",
-		Cmd:   fmt.Sprintf("echo -n '%s' | cryptsetup luksOpen /dev/%s %s --key-file /dev/stdin", encryptionPasswd, p.Path, p.Label),
-	},
-	)
+func FormatPartitionMapped(p disk.Partition) Command {
+	p.Path = "/dev/mapper/" + p.Label
+	p.Label = ""
 
-	cmds = append(cmds, MakeDiskFormattingCommand(p.Format, "/dev/mapper/"+p.Label, ""))
-
-	return
+	return FormatPartition(p)
 }
 
-func MakeEncryptedFilesystemYubikeyCommand(p disk.Partition, encryptionPasswd string) (cmds []Command) {
+func FormatAndEncryptPartition(p disk.Partition, encryptionPasswd string) []Command {
+	return []Command{
+		ShellCommand{
+			Label: "Encrypt " + p.Path,
+			Cmd: fmt.Sprintf(
+				"echo -n \"%s\" | cryptsetup luksFormat %s --key-file /dev/stdin -M luks2 --pbkdf argon2id -i 5000",
+				util.EscapeBashDoubleQuotes(encryptionPasswd),
+				p.Path,
+			),
+		},
+		ShellCommand{
+			Label: "Open LUKS partition",
+			Cmd: fmt.Sprintf(
+				"echo -n \"%s\" | cryptsetup luksOpen %s %s --key-file /dev/stdin",
+				util.EscapeBashDoubleQuotes(encryptionPasswd),
+				p.Path,
+				p.Label,
+			),
+		},
+		FormatPartitionMapped(p),
+	}
+}
+
+func FormatAndEncryptPartitionWithYubikey(p disk.Partition, encryptionPasswd string) (cmds []Command) {
 	salt_b := make([]byte, SALT_LENGTH)
 	rand.Read(salt_b)
 	salt := hex.EncodeToString(salt_b)
 
-	challenge_b := (sha512.Sum512([]byte(salt)))
+	challenge_b := sha512.Sum512([]byte(salt))
 	challenge := hex.EncodeToString(challenge_b[:])
 
 	// TODO Figure out slots
@@ -152,25 +172,22 @@ func MakeEncryptedFilesystemYubikeyCommand(p disk.Partition, encryptionPasswd st
 		OutLabel: "YUBI_RESPONSE",
 	})
 
-	if encryptionPasswd != "" {
-		cmds = append(cmds, ShellCommand{
-			Label:    "Hash the yubikey response",
-			Cmd:      fmt.Sprintf("echo -n '%s' | pbkdf2-sha512 %d %d $YUBI_RESPONSE", encryptionPasswd, KEYLENGTH/8, ITERATIONS),
-			OutLabel: "YUBI_LUKS_PASS",
-		})
-	} else {
-		cmds = append(cmds, ShellCommand{
-			Label:    "Hash the yubikey response",
-			Cmd:      fmt.Sprintf("echo | pbkdf2-sha512 %d %d $YUBI_RESPONSE", KEYLENGTH/8, ITERATIONS),
-			OutLabel: "YUBI_LUKS_PASS",
-		})
+	cmd := ShellCommand{
+		Label:    "Hash the yubikey response",
+		OutLabel: "YUBI_LUKS_PASS",
 	}
+	if encryptionPasswd != "" {
+		cmd.Cmd = fmt.Sprintf("echo -n '%s' | pbkdf2-sha512 %d %d $YUBI_RESPONSE", encryptionPasswd, KEYLENGTH/8, ITERATIONS)
+	} else {
+		cmd.Cmd = fmt.Sprintf("echo | pbkdf2-sha512 %d %d $YUBI_RESPONSE", KEYLENGTH/8, ITERATIONS)
+	}
+	cmds = append(cmds, cmd)
 
 	// TODO Sometimes crashes
 	cmds = append(cmds, ShellCommand{
 		Label: "Format Cryptsetup",
 		Cmd: fmt.Sprintf(
-			`echo -n "$YUBI_LUKS_PASS" | cryptsetup luksFormat --cipher="%s" --key-size="%d" --hash="%s" --key-file=- "/dev/%s"`,
+			`echo -n "$YUBI_LUKS_PASS" | cryptsetup luksFormat --cipher="%s" --key-size="%d" --hash="%s" --key-file=- "%s"`,
 			CIPHER,
 			KEYLENGTH,
 			HASH,
@@ -181,39 +198,36 @@ func MakeEncryptedFilesystemYubikeyCommand(p disk.Partition, encryptionPasswd st
 	cmds = append(cmds, ShellCommand{
 		Label: "Open Luks",
 		Cmd: fmt.Sprintf(
-			`echo -n "$YUBI_LUKS_PASS" | cryptsetup luksOpen /dev/%s %s --key-file=-`,
+			`echo -n "$YUBI_LUKS_PASS" | cryptsetup luksOpen %s %s --key-file=-`,
 			p.Path,
 			p.Label,
 		),
 	})
 
-	cmds = append(cmds, MakeDiskFormattingCommand(p.Format, "/dev/mapper/"+p.Label, ""))
+	cmds = append(cmds, FormatPartitionMapped(p))
 
 	cmds = append(cmds, MountByLabel(BOOTLABEL, "/root/boot")...)
 
-	cmds = append(cmds, ShellCommand{
-		Label: "Generate cryptstore Dir",
-		Cmd:   "mkdir -p /root/boot/crypt-storage",
-	})
-
-	cmds = append(cmds, ShellCommand{
-		Label: "Write into Cryptstore",
-		Cmd:   fmt.Sprintf(`echo -ne "%s\n%d" > /root/boot/crypt-storage/default`, salt, ITERATIONS),
-	})
-
-	cmds = append(cmds, Unmount("/root/boot"))
+	cmds = append(cmds,
+		CreateDir("/root/boot/crypt-storage"),
+		ShellCommand{
+			Label: "Write into Cryptstore",
+			Cmd:   fmt.Sprintf(`echo -ne "%s\n%d" > /root/boot/crypt-storage/default`, salt, ITERATIONS),
+		},
+		Unmount("/root/boot"),
+	)
 
 	return
 }
 
-func FormatDiskLegacy(conf configuration.Conf) (s configuration.Conf, cmds []Command) {
+func BIOSDiskSetup(conf configuration.Conf) (configuration.Conf, []Command) {
 	conf.Disk.PartitionTable = disk.Mbr
 
 	conf.Disk.Partitions = []disk.Partition{
 		{
 			Format:   disk.Ext4,
 			Label:    ROOTLABEL,
-			Path:     conf.Disk.PartitionName(1),
+			Path:     "/dev/" + conf.Disk.PartitionName(1),
 			Number:   1,
 			Primary:  true,
 			From:     "1MiB",
@@ -222,19 +236,17 @@ func FormatDiskLegacy(conf configuration.Conf) (s configuration.Conf, cmds []Com
 		},
 	}
 
-	cmds = Commands(conf.Disk, disk.BIOS)
-
-	return conf, cmds
+	return conf, []Command{}
 }
 
-func FormatDiskEfi(conf configuration.Conf) (s configuration.Conf, cmds []Command) {
+func UEFIDiskSetup(conf configuration.Conf) (configuration.Conf, []Command) {
 	conf.Disk.PartitionTable = disk.Gpt
 
 	conf.Disk.Partitions = []disk.Partition{
 		{
 			Format:   disk.Fat32,
 			Label:    BOOTLABEL,
-			Path:     conf.Disk.PartitionName(1),
+			Path:     "/dev/" + conf.Disk.PartitionName(1),
 			Number:   1,
 			Primary:  false,
 			From:     "4MiB",
@@ -244,7 +256,7 @@ func FormatDiskEfi(conf configuration.Conf) (s configuration.Conf, cmds []Comman
 		{
 			Format:   disk.Ext4,
 			Label:    ROOTLABEL,
-			Path:     conf.Disk.PartitionName(2),
+			Path:     "/dev/" + conf.Disk.PartitionName(2),
 			Number:   2,
 			Primary:  true,
 			From:     "512MiB",
@@ -253,7 +265,5 @@ func FormatDiskEfi(conf configuration.Conf) (s configuration.Conf, cmds []Comman
 		},
 	}
 
-	cmds = Commands(conf.Disk, disk.UEFI)
-
-	return conf, cmds
+	return conf, []Command{}
 }
