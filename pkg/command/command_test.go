@@ -5,7 +5,6 @@ import (
 
 	"github.com/Meerschwein/nixos-go-up/pkg/command"
 	"github.com/Meerschwein/nixos-go-up/pkg/disk"
-	"github.com/Meerschwein/nixos-go-up/pkg/selection"
 	"github.com/Meerschwein/nixos-go-up/test/generators"
 	"github.com/stretchr/testify/require"
 	"pgregory.net/rapid"
@@ -49,29 +48,5 @@ func TestDisk_Commands_Properties(t *testing.T) {
 		cmds := command.Commands(d, bf1)
 
 		require.NotEmpty(t, cmds, "Didn't get any commands")
-	})
-}
-
-func Test_Functions_Generate_Same_Output(t *testing.T) {
-	rapid.Check(t, func(t *rapid.T) {
-		sel1 := generators.SelectionGen().Draw(t, "Selection 1").(selection.Selection)
-		sel2 := generators.SelectionGen().Filter(func(sel selection.Selection) bool {
-			return sel.Hostname != sel1.Hostname
-		}).Draw(t, "Selection 2").(selection.Selection)
-
-		funcs := []func(selection.Selection) (selection.Selection, []command.Command){
-			command.UefiMountBootDir,
-			command.MountRootToMnt,
-			command.NixosInstall,
-		}
-
-		for _, f := range funcs {
-			outSel1, outCmds1 := f(sel1)
-			outSel2, outCmds2 := f(sel2)
-
-			require.Equal(t, sel1, outSel1, "Same Selections 1")
-			require.Equal(t, sel2, outSel2, "Same Selections 2")
-			require.Equal(t, outCmds1, outCmds2, "Same Commands")
-		}
 	})
 }

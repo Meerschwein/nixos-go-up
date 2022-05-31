@@ -16,7 +16,10 @@
     {
       "label": "format",
       "type": "shell",
-      "command": "treefmt"
+      "command": "treefmt",
+      "presentation": {
+        "reveal": "silent"
+      }
     },
     {
       "label": "dry run",

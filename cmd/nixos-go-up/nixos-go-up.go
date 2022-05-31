@@ -70,7 +70,8 @@ func main() {
 		command.DryRun(cmds)
 	} else if toScript {
 		script := command.ShellScript(cmds)
-		os.WriteFile(scriptname, []byte(script), 0o644)
+		err := os.WriteFile(scriptname, []byte(script), 0o644)
+		util.ExitIfErr(err)
 	} else {
 		command.RunCmds(cmds)
 	}

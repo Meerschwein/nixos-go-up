@@ -138,9 +138,6 @@ func MakeEncryptedFilesystemCommand(p disk.Partition, encryptionPasswd string) (
 }
 
 func MakeEncryptedFilesystemYubikeyCommand(p disk.Partition, encryptionPasswd string) (cmds []Command) {
-	// TODO
-	// These instuctions are executed when they shouldnt but it cant bechanged
-	// since the following commands need their output
 	salt_b := make([]byte, SALT_LENGTH)
 	rand.Read(salt_b)
 	salt := hex.EncodeToString(salt_b)
@@ -192,19 +189,7 @@ func MakeEncryptedFilesystemYubikeyCommand(p disk.Partition, encryptionPasswd st
 
 	cmds = append(cmds, MakeDiskFormattingCommand(p.Format, "/dev/mapper/"+p.Label, ""))
 
-	cmds = append(cmds, Sleep(2))
-
-	cmds = append(cmds, ShellCommand{
-		Label: "Create /root/boot",
-		Cmd:   "mkdir -p /root/boot",
-	})
-
-	cmds = append(cmds, ShellCommand{
-		Label: fmt.Sprintf("Mounting %s to /root/boot", BOOTLABEL),
-		Cmd:   fmt.Sprintf("mount /dev/disk/by-label/%s /root/boot", BOOTLABEL),
-	})
-
-	cmds = append(cmds, Sleep(2))
+	cmds = append(cmds, MountByLabel(BOOTLABEL, "/root/boot")...)
 
 	cmds = append(cmds, ShellCommand{
 		Label: "Generate cryptstore Dir",
@@ -216,10 +201,7 @@ func MakeEncryptedFilesystemYubikeyCommand(p disk.Partition, encryptionPasswd st
 		Cmd:   fmt.Sprintf(`echo -ne "%s\n%d" > /root/boot/crypt-storage/default`, salt, ITERATIONS),
 	})
 
-	cmds = append(cmds, ShellCommand{
-		Label: "Unmounting /root/boot",
-		Cmd:   "umount /root/boot",
-	})
+	cmds = append(cmds, Unmount("/root/boot"))
 
 	return
 }
