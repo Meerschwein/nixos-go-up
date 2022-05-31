@@ -70,7 +70,7 @@ func main() {
 		command.DryRun(cmds)
 	} else if toScript {
 		script := command.ShellScript(cmds)
-		os.WriteFile(scriptname, []byte(script), 0644)
+		os.WriteFile(scriptname, []byte(script), 0o644)
 	} else {
 		command.RunCmds(cmds)
 	}

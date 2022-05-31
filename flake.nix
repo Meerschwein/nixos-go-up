@@ -21,16 +21,21 @@
   {
     devShell.${system} = pkgs.mkShell {
       packages = with pkgs; [
+        # Go tools
         gopls
         gopkgs
         go-outline
         gotests
         delve
         go-tools
-        gofumpt
         gomodifytags
         impl
         go_1_17
+
+        # Formatting
+        treefmt
+        gofumpt
+        alejandra
 
         nixos-shell
       ];

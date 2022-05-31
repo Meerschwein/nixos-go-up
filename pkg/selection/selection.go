@@ -121,7 +121,6 @@ func SelectDisk(sel Selection) (Selection, error) {
 	}
 
 	i, _, err := prompt.Run()
-
 	if err != nil {
 		return Selection{}, SelectionStepError("Select Disk", err)
 	}
@@ -267,7 +266,6 @@ func SelectDesktopEnviroment(sel Selection) (Selection, error) {
 	}
 
 	i, _, err := prompt.Run()
-
 	if err != nil {
 		return Selection{}, SelectionStepError("Desktop Enviroment", err)
 	}

@@ -1,10 +1,13 @@
-{ stdenv, fetchurl, openssl }:
-
+{
+  stdenv,
+  fetchurl,
+  openssl,
+}:
 stdenv.mkDerivation rec {
   name = "pbkdf2-sha512";
   version = "latest";
   buildInputs = [openssl];
-    
+
   src = fetchurl {
     url = "https://raw.githubusercontent.com/NixOS/nixpkgs/master/nixos/modules/system/boot/pbkdf2-sha512.c";
     sha256 = "0ky414spzpndiifk7wca3q3l9gzs1ksn763dmy48xdn3q0i75s9r";

@@ -14,9 +14,9 @@
       "command": "go test ./... -rapid.checks=1000"
     },
     {
-      "label": "fmt",
+      "label": "format",
       "type": "shell",
-      "command": "go fmt ./..."
+      "command": "treefmt"
     },
     {
       "label": "dry run",

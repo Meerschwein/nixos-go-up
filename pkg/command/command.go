@@ -109,8 +109,6 @@ func MakeCommandGenerators(sel selection.Selection) (generators []CommandGenerat
 		generators = append(generators, FormatDiskLegacy)
 	}
 
-	// generators = append(generators, SleepG(10))
-
 	generators = append(generators,
 		func(sel selection.Selection) (selection.Selection, []Command) {
 			cmds := []Command{ShellCommand{
@@ -119,13 +117,6 @@ func MakeCommandGenerators(sel selection.Selection) (generators []CommandGenerat
 			}}
 			return sel, cmds
 		},
-		// func(sel selection.Selection) (selection.Selection, []Command) {
-		// 	cmds := []Command{ShellCommand{
-		// 		Label: "Reload Daemons",
-		// 		Cmd:   "systemctl daemon-reload",
-		// 	}}
-		// 	return sel, cmds
-		// },
 	)
 	if sel.Disk.Encrypt {
 		generators = append(generators, MountEncryptedRootToMnt)
@@ -203,7 +194,7 @@ func GenerateCustomNixosConfig(sel selection.Selection) (string, error) {
 		Desktopmanager: selection.NixConfiguration(sel.DesktopEnviroment),
 		KeyboardLayout: sel.KeyboardLayout,
 		Username:       sel.Username,
-		PasswordHash: util.MkPasswd(sel.Password),
+		PasswordHash:   util.MkPasswd(sel.Password),
 	}
 
 	interfaces, err := util.GetInterfaces()
@@ -242,12 +233,6 @@ func GenerateNixosConfig(sel selection.Selection) (s selection.Selection, cmds [
 		Label: "Generate default nixos configuration at /mnt",
 		Cmd:   "nixos-generate-config --root /mnt",
 	})
-
-	// cmds = append(cmds, ShellCommand{
-	// 	Label:    "Generate user password hash",
-	// 	Cmd:      fmt.Sprintf("mkpasswd --method=sha-512 '%s' | tr -d ' \\n' | sed -e \"s/'/'\\\\\\\\''/g; 1s/^/'/; \\$s/\\$/'/\"", sel.Password),
-	// 	OutLabel: "USER_PASSWD",
-	// })
 
 	config, _ := GenerateCustomNixosConfig(sel)
 	cmds = append(cmds, ShellCommand{

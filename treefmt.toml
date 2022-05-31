@@ -1,0 +1,8 @@
+[formatter.golang]
+command = "gofumpt"
+options = ["-w"]
+includes = ["*.go"]
+
+[formatter.nix]
+command = "alejandra"
+includes = ["*.nix"]
