@@ -164,7 +164,7 @@ func MakeEncryptedFilesystemYubikeyCommand(p disk.Partition, encryptionPasswd st
 	} else {
 		cmds = append(cmds, ShellCommand{
 			Label:    "Hash the yubikey response",
-			Cmd:      fmt.Sprintf("echo -n '' | pbkdf2-sha512 %d %d $YUBI_RESPONSE", KEYLENGTH/8, ITERATIONS),
+			Cmd:      fmt.Sprintf("echo | pbkdf2-sha512 %d %d $YUBI_RESPONSE", KEYLENGTH/8, ITERATIONS),
 			OutLabel: "YUBI_LUKS_PASS",
 		})
 	}
