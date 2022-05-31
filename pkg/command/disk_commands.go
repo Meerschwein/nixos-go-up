@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/Meerschwein/nixos-go-up/pkg/configuration"
 	"github.com/Meerschwein/nixos-go-up/pkg/disk"
-	"github.com/Meerschwein/nixos-go-up/pkg/selection"
 )
 
 const (
@@ -206,14 +206,14 @@ func MakeEncryptedFilesystemYubikeyCommand(p disk.Partition, encryptionPasswd st
 	return
 }
 
-func FormatDiskLegacy(sel selection.Selection) (s selection.Selection, cmds []Command) {
-	sel.Disk.PartitionTable = disk.Mbr
+func FormatDiskLegacy(conf configuration.Conf) (s configuration.Conf, cmds []Command) {
+	conf.Disk.PartitionTable = disk.Mbr
 
-	sel.Disk.Partitions = []disk.Partition{
+	conf.Disk.Partitions = []disk.Partition{
 		{
 			Format:   disk.Ext4,
 			Label:    ROOTLABEL,
-			Path:     sel.Disk.PartitionName(1),
+			Path:     conf.Disk.PartitionName(1),
 			Number:   1,
 			Primary:  true,
 			From:     "1MiB",
@@ -222,19 +222,19 @@ func FormatDiskLegacy(sel selection.Selection) (s selection.Selection, cmds []Co
 		},
 	}
 
-	cmds = Commands(sel.Disk, disk.BIOS)
+	cmds = Commands(conf.Disk, disk.BIOS)
 
-	return sel, cmds
+	return conf, cmds
 }
 
-func FormatDiskEfi(sel selection.Selection) (s selection.Selection, cmds []Command) {
-	sel.Disk.PartitionTable = disk.Gpt
+func FormatDiskEfi(conf configuration.Conf) (s configuration.Conf, cmds []Command) {
+	conf.Disk.PartitionTable = disk.Gpt
 
-	sel.Disk.Partitions = []disk.Partition{
+	conf.Disk.Partitions = []disk.Partition{
 		{
 			Format:   disk.Fat32,
 			Label:    BOOTLABEL,
-			Path:     sel.Disk.PartitionName(1),
+			Path:     conf.Disk.PartitionName(1),
 			Number:   1,
 			Primary:  false,
 			From:     "4MiB",
@@ -244,7 +244,7 @@ func FormatDiskEfi(sel selection.Selection) (s selection.Selection, cmds []Comma
 		{
 			Format:   disk.Ext4,
 			Label:    ROOTLABEL,
-			Path:     sel.Disk.PartitionName(2),
+			Path:     conf.Disk.PartitionName(2),
 			Number:   2,
 			Primary:  true,
 			From:     "512MiB",
@@ -253,7 +253,7 @@ func FormatDiskEfi(sel selection.Selection) (s selection.Selection, cmds []Comma
 		},
 	}
 
-	cmds = Commands(sel.Disk, disk.UEFI)
+	cmds = Commands(conf.Disk, disk.UEFI)
 
-	return sel, cmds
+	return conf, cmds
 }

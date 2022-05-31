@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/Meerschwein/nixos-go-up/pkg/util"
 )
 
 type ShellCommand struct {
@@ -20,11 +22,11 @@ func (c ShellCommand) Message() string {
 }
 
 func (c ShellCommand) Execute(state map[string]string) (key string, val string, err error) {
-	fmt.Println(c.Cmd)
-
 	for k, v := range state {
 		c.Cmd = strings.ReplaceAll(c.Cmd, "$"+k, v)
 	}
+
+	fmt.Println(c.Cmd)
 
 	var out bytes.Buffer
 	exec := exec.Command("bash", "-c", c.Cmd)
@@ -39,10 +41,10 @@ func (c ShellCommand) Execute(state map[string]string) (key string, val string, 
 	return
 }
 
-func (c ShellCommand) DryRun() (cmd string) {
+func (c ShellCommand) ToShellCommand() (cmd string) {
 	cmd = c.Cmd
 	if c.OutLabel != "" {
-		cmd = c.OutLabel + "=$(" + cmd + ")"
+		cmd = fmt.Sprintf("%s=$(%s)", c.OutLabel, c.Cmd)
 	}
 	return
 }
@@ -85,5 +87,19 @@ func Unmount(dir string) Command {
 	return ShellCommand{
 		Label: "Unmounting " + dir,
 		Cmd:   "umount " + dir,
+	}
+}
+
+func WriteToFile(label, s, file string) Command {
+	return ShellCommand{
+		Label: label,
+		Cmd:   fmt.Sprintf(`echo "%s" > %s`, util.EscapeBashDoubleQuotes(s), file),
+	}
+}
+
+func AppendToFile(label, s, file string) Command {
+	return ShellCommand{
+		Label: label,
+		Cmd:   fmt.Sprintf(`echo "%s" >> %s`, util.EscapeBashDoubleQuotes(s), file),
 	}
 }

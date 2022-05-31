@@ -1,5 +1,17 @@
 package command
 
+type Replacement struct {
+	Bootloader           string
+	GrubDevice           string
+	Hostname             string
+	Timezone             string
+	NetworkingInterfaces string
+	Desktopmanager       string
+	KeyboardLayout       string
+	Username             string
+	PasswordHash         string
+}
+
 func NixOSConfiguration() string {
 	return `
 { config, pkgs, ... }:

@@ -3,7 +3,6 @@ package disk
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"strconv"
 	"strings"
 
@@ -31,6 +30,17 @@ var (
 	BIOS Firmware = "bios"
 )
 
+type Disk struct {
+	Name             string
+	SizeGB           int
+	Encrypt          bool
+	Yubikey          bool
+	EncryptionPasswd string
+
+	PartitionTable PartitionTable
+	Partitions     []Partition
+}
+
 type Partition struct {
 	Format   Filesystem
 	Label    string
@@ -42,65 +52,52 @@ type Partition struct {
 	Bootable bool
 }
 
-type Disk struct {
-	Name             string
-	Vendor           string
-	Model            string
-	SizeGB           int
-	Encrypt          bool
-	Yubikey          bool
-	EncryptionPasswd string
-
-	PartitionTable PartitionTable
-	Partitions     []Partition
-}
-
 func (d Disk) WithSize() Disk {
-	sizeKB := util.GetFirstLineOfFile("/sys/block/" + d.Name + "/size")
-	if sizeKB == "" {
+	_size := util.GetFirstLineOfFile("/sys/block/" + d.Name + "/size")
+	if _size == "" {
 		return d
 	}
 
-	_sizeKB, _ := strconv.ParseFloat(sizeKB, 32)
+	size, _ := strconv.ParseFloat(_size, 32)
 
-	d.SizeGB = int(_sizeKB / 1024 / 1024)
+	d.SizeGB = int(size / 1024 / 1024 / 2)
 
 	return d
 }
 
 func GetDisks() (disks []Disk) {
-	files, err := ioutil.ReadDir("/sys/block")
-	if err != nil {
-		log.Fatal(err)
-	}
+	devices, err := ioutil.ReadDir("/sys/block")
+	util.ExitIfErr(err)
 
-	base := "/sys/block/%s/device/%s"
-	for _, file := range files {
-		if strings.HasPrefix(file.Name(), "loop") {
+	for _, device := range devices {
+		if strings.HasPrefix(device.Name(), "loop") {
 			continue
 		}
 
-		d := Disk{
-			Name:   file.Name(),
-			Vendor: util.GetFirstLineOfFile(fmt.Sprintf(base, file.Name(), "vendor")),
-			Model:  util.GetFirstLineOfFile(fmt.Sprintf(base, file.Name(), "model")),
-		}
+		d := Disk{Name: device.Name()}
 
-		d = d.WithSize()
-
-		disks = append(disks, d)
+		disks = append(disks, d.WithSize())
 	}
 
 	return
 }
 
 func DisplayDisks(disks []Disk) (display []string) {
-	for _, disk := range disks {
-		display = append(display, fmt.Sprintf(
-			"%s\t%d Gb total",
-			disk.Name,
-			disk.SizeGB,
-		))
+	longestNameLength := 0
+	for _, d := range disks {
+		if len(d.Name) > longestNameLength {
+			longestNameLength = len(d.Name)
+		}
+	}
+
+	for _, d := range disks {
+		display = append(display,
+			fmt.Sprintf("%s%s %dGb",
+				d.Name,
+				strings.Repeat(" ", longestNameLength-len(d.Name)),
+				d.SizeGB,
+			),
+		)
 	}
 
 	return

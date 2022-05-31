@@ -14,12 +14,12 @@ const (
 type Command interface {
 	Message() string
 	Execute(map[string]string) (key string, val string, err error)
-	DryRun() string
+	ToShellCommand() string
 }
 
 func DryRun(cmds []Command) {
 	for _, cmd := range cmds {
-		fmt.Printf("--\n%s\n%s\n", cmd.Message(), cmd.DryRun())
+		fmt.Printf("--\n%s\n%s\n", cmd.Message(), cmd.ToShellCommand())
 	}
 }
 
@@ -45,7 +45,7 @@ func ShellScript(cmds []Command) (script string) {
 		script += fmt.Sprintf(
 			"# %s\n%s\n\n",
 			c.Message(),
-			c.DryRun(),
+			c.ToShellCommand(),
 		)
 	}
 

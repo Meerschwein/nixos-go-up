@@ -1,8 +1,8 @@
 package generators
 
 import (
+	"github.com/Meerschwein/nixos-go-up/pkg/configuration"
 	"github.com/Meerschwein/nixos-go-up/pkg/disk"
-	"github.com/Meerschwein/nixos-go-up/pkg/selection"
 	"pgregory.net/rapid"
 )
 
@@ -22,8 +22,6 @@ func DiskGen() *rapid.Generator {
 	return rapid.Custom(func(t *rapid.T) disk.Disk {
 		return disk.Disk{
 			Name:             String(t, "Disk_Name"),
-			Vendor:           String(t, "Disk_Vendor"),
-			Model:            String(t, "Disk_Model"),
 			SizeGB:           Int(t, "Disk_SizeGB"),
 			Encrypt:          Bool(t, "Disk_Encrypt"),
 			Yubikey:          Bool(t, "Disk_Yubikey"),
@@ -49,16 +47,20 @@ func PartitionGen() *rapid.Generator {
 	})
 }
 
-func SelectionGen() *rapid.Generator {
-	return rapid.Custom(func(t *rapid.T) selection.Selection {
-		return selection.Selection{
-			Disk:              DiskGen().Draw(t, "Disk").(disk.Disk),
-			Hostname:          String(t, "Hostname"),
-			Timezone:          String(t, "Timezone"),
-			Username:          String(t, "Username"),
-			Password:          String(t, "Password"),
-			DesktopEnviroment: rapid.SampledFrom([]selection.DesktopEnviroment{selection.GNOME, selection.XFCE, selection.NONE}).Draw(t, "DesktopEnviroment").(selection.DesktopEnviroment),
-			KeyboardLayout:    String(t, "KeyboardLayout"),
+func ConfigurationGen() *rapid.Generator {
+	return rapid.Custom(func(t *rapid.T) configuration.Conf {
+		return configuration.Conf{
+			Disk:     DiskGen().Draw(t, "Disk").(disk.Disk),
+			Hostname: String(t, "Hostname"),
+			Timezone: String(t, "Timezone"),
+			Username: String(t, "Username"),
+			Password: String(t, "Password"),
+			DesktopEnviroment: rapid.SampledFrom([]configuration.DesktopEnviroment{
+				configuration.GNOME,
+				configuration.XFCE,
+				configuration.NONE,
+			}).Draw(t, "DesktopEnviroment").(configuration.DesktopEnviroment),
+			KeyboardLayout: String(t, "KeyboardLayout"),
 		}
 	})
 }
