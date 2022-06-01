@@ -13,7 +13,7 @@ in
   buildGoModule rec {
     name = "nixos-go-up";
     src = ./..;
-    vendorSha256 = "sha256-SLk0qiI2PDoakFva9b9aDURCGs7aimqYTbO66RxhP6I=";
+    vendorSha256 = "sha256-Vxe6e9ezLXfBXW1eWCI2PQs7YYw/ESHcJAyCP8QWwVo=";
     doCheck = false;
 
     nativeBuildInputs = [makeWrapper];
