@@ -12,9 +12,10 @@ import (
 )
 
 type ShellCommand struct {
-	Label    string
-	Cmd      string
-	OutLabel string
+	Label             string
+	Cmd               string
+	OutLabel          string
+	InputPreprocessor func(string) string
 }
 
 func (c ShellCommand) Message() string {
@@ -23,6 +24,9 @@ func (c ShellCommand) Message() string {
 
 func (c ShellCommand) Execute(state map[string]string) (key string, val string, err error) {
 	for k, v := range state {
+		if c.InputPreprocessor != nil {
+			v = c.InputPreprocessor(v)
+		}
 		c.Cmd = strings.ReplaceAll(c.Cmd, "$"+k, v)
 	}
 

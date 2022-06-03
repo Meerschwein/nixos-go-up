@@ -182,7 +182,8 @@ func FormatAndEncryptPartitionWithYubikey(p disk.Partition, encryptionPasswd str
 	cmds = append(cmds, cmd)
 
 	cmds = append(cmds, ShellCommand{
-		Label: "Format Cryptsetup",
+		Label:             "Format Cryptsetup",
+		InputPreprocessor: util.EscapeBashDoubleQuotes,
 		Cmd: fmt.Sprintf(
 			`echo -n "$YUBI_LUKS_PASS" | cryptsetup luksFormat --cipher="%s" --key-size="%d" --hash="%s" --key-file=- "%s"`,
 			CIPHER,
@@ -193,7 +194,8 @@ func FormatAndEncryptPartitionWithYubikey(p disk.Partition, encryptionPasswd str
 	})
 
 	cmds = append(cmds, ShellCommand{
-		Label: "Open Luks",
+		Label:             "Open Luks",
+		InputPreprocessor: util.EscapeBashDoubleQuotes,
 		Cmd: fmt.Sprintf(
 			`echo -n "$YUBI_LUKS_PASS" | cryptsetup luksOpen %s %s --key-file=-`,
 			p.Path,
