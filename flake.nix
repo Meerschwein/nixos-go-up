@@ -46,6 +46,7 @@
       type = "app";
       program = "${pkgs.nixos-go-up}/bin/nixos-go-up";
     };
+    defaultApp.${system} = apps.${system}.default;
     nixosConfigurations.vm = lib.makeOverridable lib.nixosSystem {
       inherit system pkgs lib;
       modules = [
