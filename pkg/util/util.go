@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"regexp"
 	"strings"
 
 	"github.com/itsyouonline/identityserver/credentials/password/keyderivation/crypt/sha512crypt"
@@ -21,6 +22,11 @@ func EscapeBashDoubleQuotes(s string) string {
 	}
 
 	return s
+}
+
+func RemoveLinebreaks(s string) string {
+	re := regexp.MustCompile(`\x{000D}\x{000A}|[\x{000A}\x{000B}\x{000C}\x{000D}\x{0085}\x{2028}\x{2029}]`)
+	return re.ReplaceAllString(s, ``)
 }
 
 func ExitIfErr(err error) {

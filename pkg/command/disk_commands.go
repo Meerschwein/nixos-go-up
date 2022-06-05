@@ -9,6 +9,7 @@ import (
 	"github.com/Meerschwein/nixos-go-up/pkg/configuration"
 	"github.com/Meerschwein/nixos-go-up/pkg/disk"
 	"github.com/Meerschwein/nixos-go-up/pkg/util"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 const (
@@ -157,29 +158,35 @@ func FormatAndEncryptPartition(p disk.Partition, encryptionPasswd string) []Comm
 }
 
 func FormatAndEncryptPartitionWithYubikey(p disk.Partition, encryptionPasswd string, yubikeySlot int) (cmds []Command) {
-	salt_b := make([]byte, SALT_LENGTH)
-	rand.Read(salt_b)
-	salt := hex.EncodeToString(salt_b)
+	salt_rb := make([]byte, SALT_LENGTH)
+	rand.Read(salt_rb)
+	salt_hex := hex.EncodeToString(salt_rb)
 
-	challenge_b := sha512.Sum512([]byte(salt))
-	challenge := hex.EncodeToString(challenge_b[:])
+	challenge_rb := sha512.Sum512([]byte(salt_hex))
+	challenge_hex := hex.EncodeToString(challenge_rb[:])
 
 	cmds = append(cmds, ShellCommand{
 		Label:    "Challenge the yubikey to a reponse",
-		Cmd:      fmt.Sprintf("ykchalresp -%d -x %s 2>/dev/null", yubikeySlot, challenge),
+		Cmd:      fmt.Sprintf("ykchalresp -%d -x %s 2>/dev/null", yubikeySlot, challenge_hex),
 		OutLabel: "YUBI_RESPONSE",
 	})
 
-	cmd := ShellCommand{
+	cmds = append(cmds, FuncCommand{
 		Label:    "Hash the yubikey response",
 		OutLabel: "YUBI_LUKS_PASS",
-	}
-	if encryptionPasswd != "" {
-		cmd.Cmd = fmt.Sprintf("echo -n '%s' | pbkdf2-sha512 %d %d $YUBI_RESPONSE", encryptionPasswd, KEYLENGTH/8, ITERATIONS)
-	} else {
-		cmd.Cmd = fmt.Sprintf("echo | pbkdf2-sha512 %d %d $YUBI_RESPONSE", KEYLENGTH/8, ITERATIONS)
-	}
-	cmds = append(cmds, cmd)
+		Cmd: func(state map[string]string) (val string, err error) {
+			yubires_hex := state["YUBI_RESPONSE"]
+
+			yubires_rb, err := hex.DecodeString(util.RemoveLinebreaks(yubires_hex))
+			if err != nil {
+				return
+			}
+
+			luks_pass := pbkdf2.Key([]byte(encryptionPasswd), yubires_rb, ITERATIONS, KEYLENGTH/8, sha512.New)
+
+			return string(luks_pass), nil
+		},
+	})
 
 	cmds = append(cmds, ShellCommand{
 		Label:             "Format Cryptsetup",
@@ -211,7 +218,7 @@ func FormatAndEncryptPartitionWithYubikey(p disk.Partition, encryptionPasswd str
 		CreateDir("/root/boot/crypt-storage"),
 		ShellCommand{
 			Label: "Write into Cryptstore",
-			Cmd:   fmt.Sprintf(`echo -ne "%s\n%d" > /root/boot/crypt-storage/default`, salt, ITERATIONS),
+			Cmd:   fmt.Sprintf(`echo -ne "%s\n%d" > /root/boot/crypt-storage/default`, salt_hex, ITERATIONS),
 		},
 		Unmount("/root/boot"),
 	)

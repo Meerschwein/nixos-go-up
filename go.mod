@@ -6,6 +6,7 @@ require (
 	github.com/itsyouonline/identityserver v1.0.1
 	github.com/manifoldco/promptui v0.9.0
 	github.com/stretchr/testify v1.7.1
+	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e
 	pgregory.net/rapid v0.4.7
 )
 
