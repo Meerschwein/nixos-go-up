@@ -42,7 +42,7 @@ func DiskEncryption(conf configuration.Conf) (configuration.Conf, error) {
 	if conf.Yubikey {
 		fmt.Println("Warning! You must have the Yubikey plugged and a slot configured for challenge response!")
 		prompt := promptui.Select{
-			Label:     "Select disk to install NixOS to",
+			Label:     "Select the challenge response slot",
 			Items:     []string{"1", "2"},
 			Size:      2,
 			CursorPos: 1,
